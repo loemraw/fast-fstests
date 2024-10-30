@@ -88,8 +88,16 @@ async def cleanup_machine(machine_id, proc: Process, mkosi_kernel_dir):
     ).wait()
 
     if status != 0:
-        proc.send_signal(SIGINT)
-        await asyncio.wait_for(proc.wait(), timeout=10)
+        try:
+            proc.send_signal(SIGINT)
+            await asyncio.wait_for(proc.wait(), timeout=10)
+        except ProcessLookupError:
+            logger.info("process for machine %s already finished", machine_id)
+        except asyncio.TimeoutError:
+            logger.warning("machine %s process did not end!", machine_id)
+            return
+
+    logger.info("cleaned up machine %s", machine_id)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -104,26 +112,30 @@ async def machine_pool(num_machines, mkosi_kernel_dir, mkosi_options):
         )
     )
 
-    tasks = [
-        asyncio.create_task(
-            set_machine_ready(machine_id, machine_pool, mkosi_kernel_dir)
-        )
-        for machine_id in machine_ids
-    ]
-
-    try:
-        yield machine_pool
-    finally:
-        for task in tasks:
-            task.cancel()
-            await task
-
-        await asyncio.gather(
-            *(
-                cleanup_machine(machine_id, proc, mkosi_kernel_dir)
-                for machine_id, proc in zip(machine_ids, procs)
+    machine_status_tasks = asyncio.gather(
+        *(
+            asyncio.create_task(
+                set_machine_ready(machine_id, machine_pool, mkosi_kernel_dir)
             )
+            for machine_id in machine_ids
         )
+    )
+
+    yield machine_pool
+
+    if machine_status_tasks.cancel():
+        try:
+            await machine_status_tasks
+        except asyncio.CancelledError:
+            logger.info("machine_status_tasks are cancelled")
+
+    cleanup_tasks = asyncio.gather(
+        *(
+            cleanup_machine(machine_id, proc, mkosi_kernel_dir)
+            for machine_id, proc in zip(machine_ids, procs)
+        ),
+    )
+    await cleanup_tasks
 
 
 @asynccontextmanager
@@ -140,8 +152,7 @@ async def get_machine(machine_pool: MachinePool):
         machine_pool.semaphore.release()
 
 
-@pytest.mark.asyncio_cooperative
-async def test(test, machine_pool, mkosi_kernel_dir, fstests_dir):
+async def __test(test, machine_pool, mkosi_kernel_dir, fstests_dir):
     logger.info("running test %s looking for machine...", test)
     async with get_machine(machine_pool) as machine_id:
         logger.info("running test %s found machine %s", test, machine_id)
@@ -160,8 +171,17 @@ async def test(test, machine_pool, mkosi_kernel_dir, fstests_dir):
         status = await proc.wait()
         stdout, stderr = await proc.communicate()
 
-        if "[not run]" in stdout.decode():
-            pytest.skip()
+    return status, stdout, stderr
+
+
+@pytest.mark.asyncio_cooperative
+async def test(test, machine_pool, mkosi_kernel_dir, fstests_dir):
+    status, stdout, stderr = await __test(
+        test, machine_pool, mkosi_kernel_dir, fstests_dir
+    )
+
+    if "[not run]" in stdout.decode():
+        pytest.skip()
 
     if status != 0:
         assert stdout.decode() == ""
