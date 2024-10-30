@@ -39,7 +39,7 @@ def pytest_addoption(parser: pytest.Parser):
         action="store",
         default=None,
         help="Which test suite to run",
-        choices=("normal", "quick"),
+        choices=("normal", "no_outliers", "quick"),
     )
 
     parser.addoption(
@@ -67,7 +67,7 @@ def fstests_dir(request):
 @pytest.hookimpl
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     if suite := metafunc.config.getoption("--test-suite"):
-        with open("v2/test-cheat.toml", "rb") as f:
+        with open("config.toml", "rb") as f:
             tests = tomllib.load(f)["suite"][suite]
     else:
         tests = metafunc.config.getoption("-T")
