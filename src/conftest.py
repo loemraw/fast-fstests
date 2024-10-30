@@ -1,4 +1,3 @@
-import shlex
 import tomllib
 from random import shuffle
 
@@ -122,8 +121,6 @@ def mkosi_kernel_dir(request):
 @pytest.fixture(scope="session")
 def mkosi_options(request):
     if (options := request.config.getoption("--mkosi-options")) is not None:
-        options = shlex.split(options)
-        print(options)
         return options
     if (options := request.config.getini("mkosi_options")) is not None:
         return " ".join(options)
@@ -144,19 +141,21 @@ def fstests_dir(request):
 @pytest.hookimpl
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     suite = metafunc.config.getoption("--test-suite")
-    if suite is None:
+    tests = metafunc.config.getoption("--tests")
+
+    if suite is None and tests is None:
         suite = metafunc.config.getini("test_suite")
+        tests = metafunc.config.getini("tests")
+
+        if suite is None and tests is None:
+            raise ValueError("no tests specified!")
+
+    if suite and tests:
+        raise ValueError("cannot specify both suite and tests!")
 
     if isinstance(suite, str):
         with open("suite.toml", "rb") as f:
             tests = tomllib.load(f)[suite]
-    else:
-        tests = metafunc.config.getoption("--tests")
-        if tests is None:
-            tests = metafunc.config.getini("tests")
-
-    if tests is None:
-        raise ValueError("tests not specified!")
 
     assert isinstance(tests, list)
 
@@ -171,3 +170,10 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         shuffle(tests)
 
     metafunc.parametrize("test", tests)
+
+
+@pytest.hookimpl
+def pytest_configure():
+    import logging
+
+    # logging.basicConfig(level=logging.INFO)
