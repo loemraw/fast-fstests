@@ -90,7 +90,7 @@ async def cleanup_machine(machine_id, proc: Process, mkosi_kernel_dir):
     if status != 0:
         try:
             proc.send_signal(SIGINT)
-            await asyncio.wait_for(proc.wait(), timeout=10)
+            await asyncio.wait_for(proc.wait(), timeout=2)
         except ProcessLookupError:
             logger.info("process for machine %s already finished", machine_id)
         except asyncio.TimeoutError:
@@ -112,30 +112,25 @@ async def machine_pool(num_machines, mkosi_kernel_dir, mkosi_options):
         )
     )
 
-    machine_status_tasks = asyncio.gather(
-        *(
-            asyncio.create_task(
-                set_machine_ready(machine_id, machine_pool, mkosi_kernel_dir)
-            )
-            for machine_id in machine_ids
+    machine_status_tasks = [
+        asyncio.create_task(
+            set_machine_ready(machine_id, machine_pool, mkosi_kernel_dir)
         )
-    )
+        for machine_id in machine_ids
+    ]
 
     yield machine_pool
 
-    if machine_status_tasks.cancel():
-        try:
-            await machine_status_tasks
-        except asyncio.CancelledError:
-            logger.info("machine_status_tasks are cancelled")
+    for task in machine_status_tasks:
+        task.cancel()
+    await asyncio.gather(*machine_status_tasks, return_exceptions=True)
 
-    cleanup_tasks = asyncio.gather(
+    await asyncio.gather(
         *(
             cleanup_machine(machine_id, proc, mkosi_kernel_dir)
             for machine_id, proc in zip(machine_ids, procs)
         ),
     )
-    await cleanup_tasks
 
 
 @asynccontextmanager

@@ -1,7 +1,10 @@
-import tomllib
+import logging
+import subprocess
 from random import shuffle
 
 import pytest
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.hookimpl
@@ -46,13 +49,26 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
-        "--fstests-dir",
+        "--fstests-dir-host",
         action="store",
-        default="/fstests/",
+        default=None,
         help="Path to fstests source on vm",
     )
     parser.addini(
-        "fstests_dir",
+        "fstests_dir_host",
+        type="string",
+        default=None,
+        help="Path to fstests source on vm",
+    )
+
+    parser.addoption(
+        "--fstests-dir-machine",
+        action="store",
+        default=None,
+        help="Path to fstests source on vm",
+    )
+    parser.addini(
+        "fstests_dir_machine",
         type="string",
         default=None,
         help="Path to fstests source on vm",
@@ -62,27 +78,39 @@ def pytest_addoption(parser: pytest.Parser):
         "--tests",
         action="append",
         default=None,
-        help="Which tests to run",
+        help="List of individual tests to run (can't be used with group)",
     )
     parser.addini(
         "tests",
         type="args",
         default=None,
-        help="List of individual tests to run (can't be used with test-suite)",
+        help="List of individual tests to run (can't be used with group)",
     )
 
     parser.addoption(
-        "--test-suite",
-        action="store",
+        "--except",
+        action="append",
         default=None,
-        help="Which test suite to run",
-        choices=("normal", "no_outliers", "quick"),
+        help="List of individual tests to not run",
     )
     parser.addini(
-        "test_suite",
+        "except",
+        type="args",
+        default=None,
+        help="List of individual tests to not run",
+    )
+
+    parser.addoption(
+        "--group",
+        action="store",
+        default=None,
+        help="Which group to run (can't be used with tests)",
+    )
+    parser.addini(
+        "group",
         type="string",
         default=None,
-        help="Which test suite to run (can't be used with tests)",
+        help="Which group to run (can't be used with tests)",
     )
 
     parser.addoption(
@@ -130,32 +158,77 @@ def mkosi_options(request):
 
 @pytest.fixture(scope="session")
 def fstests_dir(request):
-    if (dir := request.config.getoption("--fstests-dir")) is not None:
-        return dir
-    if (dir := request.config.getini("fstests_dir")) is not None:
-        return dir
+    dir = request.config.getoption(
+        "--fstests-dir-machine"
+    ) or request.config.getini("fstests_dir_machine")
+    if dir is None:
+        raise ValueError("fstests-dir-machine not specified!")
+    return dir
 
-    raise ValueError("fstests-dir not specified!")
+
+def get_tests_for_(group, except_tests, fstests_dir_host):
+    def tests_for_(dir, group):
+        proc = subprocess.run(
+            "../../tools/mkgroupfile",
+            cwd=f"{fstests_dir_host}/tests/{dir}",
+            capture_output=True,
+        )
+
+        if proc.returncode != 0:
+            raise ValueError("unable to determine tests")
+
+        stdout = proc.stdout.decode()
+
+        logger.info(stdout)
+
+        for line in stdout.splitlines():
+            if group in line:
+                test = f"{dir}/{line.split()[0]}"
+                if test in except_tests:
+                    continue
+                yield test
+
+    if "/" in group:
+        fs_dir, group = group.split("/")
+        return [
+            *tests_for_(fs_dir, group),
+        ]
+
+    return [
+        *tests_for_("btrfs", group),
+        *tests_for_("generic", group),
+    ]
 
 
 @pytest.hookimpl
 def pytest_generate_tests(metafunc: pytest.Metafunc):
-    suite = metafunc.config.getoption("--test-suite")
+    group = metafunc.config.getoption("--group")
     tests = metafunc.config.getoption("--tests")
 
-    if suite is None and tests is None:
-        suite = metafunc.config.getini("test_suite")
+    if group is None and tests is None:
+        group = metafunc.config.getini("group")
         tests = metafunc.config.getini("tests")
 
-        if suite is None and tests is None:
+        if group is None and tests is None:
             raise ValueError("no tests specified!")
 
-    if suite and tests:
+    if group and tests:
         raise ValueError("cannot specify both suite and tests!")
 
-    if isinstance(suite, str):
-        with open("suite.toml", "rb") as f:
-            tests = tomllib.load(f)[suite]
+    if isinstance(group, str):
+        fstests_dir_host = metafunc.config.getoption(
+            "--fstests-dir-host"
+        ) or metafunc.config.getini("fstests_dir_host")
+
+        if not isinstance(fstests_dir_host, str):
+            raise ValueError("fstests_dir_host not specified!")
+
+        except_tests = metafunc.config.getoption(
+            "--except"
+        ) or metafunc.config.getini("except")
+
+        tests = get_tests_for_(group, except_tests, fstests_dir_host)
+        logger.info(tests)
 
     assert isinstance(tests, list)
 
@@ -174,6 +247,4 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
 @pytest.hookimpl
 def pytest_configure():
-    import logging
-
-    # logging.basicConfig(level=logging.INFO)
+    logging.basicConfig()
