@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 from random import shuffle
 
@@ -9,19 +10,6 @@ logger = logging.getLogger(__name__)
 
 @pytest.hookimpl
 def pytest_addoption(parser: pytest.Parser):
-    parser.addoption(
-        "--num-machines",
-        action="store",
-        default=None,
-        help="Number of virtual machines to use for testing",
-    )
-    parser.addini(
-        "num_machines",
-        type="string",
-        default=None,
-        help="Number of virtual machines to use for testing",
-    )
-
     parser.addoption(
         "--mkosi-kernel-dir",
         action="store",
@@ -128,12 +116,7 @@ def pytest_addoption(parser: pytest.Parser):
 
 @pytest.fixture(scope="session")
 def num_machines(request: pytest.FixtureRequest):
-    if (nm := request.config.getoption("--num-machines")) is not None:
-        return int(nm)
-    if (nm := request.config.getini("num_machines")) is not None:
-        return int(nm)
-
-    raise ValueError("num-machines not specified!")
+    return int(os.getenv("NUM_PROCESSES"))
 
 
 @pytest.fixture(scope="session")
@@ -242,6 +225,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     metafunc.parametrize("test", tests)
 
 
-@pytest.hookimpl
 def pytest_configure(config: pytest.Config):
-    logging.basicConfig()
+    num_processes = config.getoption("numprocesses")
+    if num_processes is not None:
+        os.environ["NUM_PROCESSES"] = str(num_processes)
