@@ -1,7 +1,6 @@
 import logging
 import os
 import subprocess
-from random import shuffle
 
 import pytest
 
@@ -99,18 +98,6 @@ def pytest_addoption(parser: pytest.Parser):
         type="string",
         default=None,
         help="Which group to run (can't be used with tests)",
-    )
-
-    parser.addoption(
-        "--random",
-        action="store_true",
-        help="Randomize order of tests",
-    )
-    parser.addini(
-        "random",
-        type="bool",
-        default=False,
-        help="Randomize order of tests",
     )
 
 
@@ -211,16 +198,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         tests = get_tests_for_(group, except_tests, fstests_dir_host)
 
     assert isinstance(tests, list)
-
-    is_random = metafunc.config.getoption("--random")
-    if is_random is None:
-        is_random = metafunc.config.getini("random")
-
-    if is_random is None:
-        raise ValueError("randomness not specified!")
-
-    if is_random:
-        shuffle(tests)
 
     metafunc.parametrize("test", tests)
 
