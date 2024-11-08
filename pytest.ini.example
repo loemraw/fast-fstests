@@ -1,0 +1,13 @@
+[pytest]
+mkosi_kernel_dir=			/home/leomar/local/mkosi-kernel/
+mkosi_options=				--profile=fastfstests
+fstests_dir_host=			/home/leomar/local/fstests/
+fstests_dir_machine=		/fstests/
+tests=
+group=						quick
+exclude=					btrfs/187
+							generic/166
+							generic/562
+							generic/449
+results_db_path=			results/results.db			
+addopts=					-rsf --durations=20
