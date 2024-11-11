@@ -279,10 +279,6 @@ XDIST WORKAROUND
 def root_tmp_dir(tmp_path_factory):
     dir = tmp_path_factory.getbasetemp().parent
     yield dir
-    for filename in os.listdir(dir):
-        file_path = os.path.join(dir, filename)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
 
 
 @pytest.fixture(scope="session")
