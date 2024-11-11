@@ -267,7 +267,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
 
 
 def pytest_configure(config):
-    if "PYTEST_XDIST_WORKER_COUNT" not in os.environ:
+    if "PYTEST_XDIST_WORKER" not in os.environ:
         os.environ["RANDOM_SEED"] = str(random.random())
 
 
@@ -277,9 +277,9 @@ XDIST WORKAROUND
 
 
 @pytest.fixture(scope="session")
-def root_tmp_dir(tmp_path_factory, worker_id):
+def root_tmp_dir(tmp_path_factory):
     # if xdist is "disabled" use a temp dir
-    if worker_id == "master":
+    if "PYTEST_XDIST_WORKER" not in os.environ:
         return tmp_path_factory.mktemp("fast-fstests")
     return tmp_path_factory.getbasetemp().parent
 
