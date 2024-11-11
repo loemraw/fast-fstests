@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import sys
 import time
+import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List
@@ -276,9 +277,11 @@ XDIST WORKAROUND
 
 
 @pytest.fixture(scope="session")
-def root_tmp_dir(tmp_path_factory):
-    dir = tmp_path_factory.getbasetemp().parent
-    yield dir
+def root_tmp_dir(tmp_path_factory, worker_id):
+    # if xdist is "disabled" use a temp dir
+    if worker_id == "master":
+        return tmp_path_factory.mktemp("fast-fstests")
+    return tmp_path_factory.getbasetemp().parent
 
 
 @pytest.fixture(scope="session")
