@@ -62,7 +62,7 @@ pip install -r requirements.txt
 python3 src/setup_db.py [PATH TO CREATE RESULTS DB]
 ```
 
-7. Configure fast-fstests
+7. Configure fast-fstests\
 Configuration for fast-fstests goes into pytest.ini. Example included at pytest.ini.example.
 All fast-fstests options set in pytest.ini can be overriden using command line flags.
 
