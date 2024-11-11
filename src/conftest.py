@@ -266,7 +266,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     metafunc.parametrize("test", tests)
 
 
-def pytest_configure(config):
+def pytest_configure():
     if "PYTEST_XDIST_WORKER" not in os.environ:
         os.environ["RANDOM_SEED"] = str(random.random())
 
