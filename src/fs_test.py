@@ -3,10 +3,8 @@ import subprocess
 
 import pytest
 
-pytest_plugins = ("xdist",)
 
-
-def __test(test, machine_id, mkosi_kernel_dir, fstests_dir):
+def __test(test, machine_id, mkosi_config_dir, fstests_dir):
     proc = subprocess.run(
         [
             "mkosi",
@@ -15,7 +13,7 @@ def __test(test, machine_id, mkosi_kernel_dir, fstests_dir):
             "ssh",
             f"cd {fstests_dir} ; ./check {test}",
         ],
-        cwd=mkosi_kernel_dir,
+        cwd=mkosi_config_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -42,9 +40,9 @@ def summarize_stdout_skip(test, stdout):
     return f"{test}: {match.group(1).strip() if match else stdout}"
 
 
-def test(test, machine_id, mkosi_kernel_dir, fstests_dir, record_test):
+def test(test, machine_id, mkosi_config_dir, fstests_dir, record_test):
     status, stdout, stderr = __test(
-        test, machine_id, mkosi_kernel_dir, fstests_dir
+        test, machine_id, mkosi_config_dir, fstests_dir
     )
 
     stdout = stdout.decode()

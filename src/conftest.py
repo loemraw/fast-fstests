@@ -15,7 +15,7 @@ from filelock import FileLock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .db import Invocation, TestResult
+from src.db import Invocation, TestResult
 
 """
 PYTEST OPTIONS
@@ -25,16 +25,16 @@ PYTEST OPTIONS
 @pytest.hookimpl
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
-        "--mkosi-kernel-dir",
+        "--mkosi-config-dir",
         action="store",
         default=None,
-        help="Path to mkosi-kernel",
+        help="Path to mkosi-config",
     )
     parser.addini(
-        "mkosi_kernel_dir",
+        "mkosi_config_dir",
         type="string",
         default=None,
-        help="Path to mkosi-kernel",
+        help="Path to mkosi-config",
     )
 
     parser.addoption(
@@ -54,13 +54,13 @@ def pytest_addoption(parser: pytest.Parser):
         "--fstests-dir-host",
         action="store",
         default=None,
-        help="Path to fstests source on vm",
+        help="Path to fstests source on host",
     )
     parser.addini(
         "fstests_dir_host",
         type="string",
         default=None,
-        help="Path to fstests source on vm",
+        help="Path to fstests source on host",
     )
 
     parser.addoption(
@@ -145,19 +145,17 @@ def pytest_addoption(parser: pytest.Parser):
 @pytest.fixture(scope="session")
 def num_machines():
     if (num_processes := os.getenv("PYTEST_XDIST_WORKER_COUNT")) is None:
-        raise ValueError(
-            "PYTEST_XDIST_WORKER_COUNT environment variable not configured properly"
-        )
+        return 1
     return int(num_processes)
 
 
 @pytest.fixture(scope="session")
-def mkosi_kernel_dir(request):
+def mkosi_config_dir(request):
     dir = request.config.getoption(
-        "--mkosi-kernel-dir"
-    ) or request.config.getini("mkosi_kernel_dir")
+        "--mkosi-config-dir"
+    ) or request.config.getini("mkosi_config_dir")
     if dir is None:
-        raise ValueError("mkosi-kernel-dir not specified!")
+        raise ValueError("mkosi-config-dir not specified!")
     return dir
 
 
@@ -279,7 +277,7 @@ XDIST WORKAROUND
 
 @pytest.fixture(scope="session")
 def root_tmp_dir(tmp_path_factory):
-    return tmp_path_factory.getbasetemp().parent
+    return tmp_path_factory.mktemp("fstests")
 
 
 @pytest.fixture(scope="session")
@@ -345,7 +343,7 @@ class MachinePool:
     pkl_name: str
 
 
-def setup_machine(machine_id, mkosi_kernel_dir, mkosi_options):
+def setup_machine(machine_id, mkosi_config_dir, mkosi_options):
     proc = subprocess.Popen(
         [
             "mkosi",
@@ -354,7 +352,7 @@ def setup_machine(machine_id, mkosi_kernel_dir, mkosi_options):
             *(shlex.split(mkosi_options)),
             "qemu",
         ],
-        cwd=mkosi_kernel_dir,
+        cwd=mkosi_config_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -366,20 +364,20 @@ def setup_machine(machine_id, mkosi_kernel_dir, mkosi_options):
 def setup_machine_pool(
     num_machines: int,
     pkl_name: str,
-    mkosi_kernel_dir,
+    mkosi_config_dir,
     mkosi_options,
 ):
     machine_ids = list(map(str, range(num_machines)))
     procs = []
     for machine_id in machine_ids:
         procs.append(
-            setup_machine(machine_id, mkosi_kernel_dir, mkosi_options)
+            setup_machine(machine_id, mkosi_config_dir, mkosi_options)
         )
 
     return MachinePool(machine_ids, [], 0, pkl_name), procs
 
 
-def wait_for_machine_pool(mp: MachinePool, mkosi_kernel_dir):
+def wait_for_machine_pool(mp: MachinePool, mkosi_config_dir):
     while len(mp.available_machines) != len(mp.machine_ids):
         for machine_id in mp.machine_ids:
             if machine_id in mp.available_machines:
@@ -393,7 +391,7 @@ def wait_for_machine_pool(mp: MachinePool, mkosi_kernel_dir):
                     "ssh",
                     "echo POKE",
                 ],
-                cwd=mkosi_kernel_dir,
+                cwd=mkosi_config_dir,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -403,7 +401,7 @@ def wait_for_machine_pool(mp: MachinePool, mkosi_kernel_dir):
                 mp.available_machines.append(machine_id)
 
 
-def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_kernel_dir):
+def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_config_dir):
     poweroff_proc = subprocess.run(
         [
             "mkosi",
@@ -412,7 +410,7 @@ def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_kernel_dir):
             "ssh",
             "poweroff",
         ],
-        cwd=mkosi_kernel_dir,
+        cwd=mkosi_config_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -428,15 +426,15 @@ def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_kernel_dir):
         pass
 
 
-def cleanup_machine_pool(mp, procs, mkosi_kernel_dir):
+def cleanup_machine_pool(mp, procs, mkosi_config_dir):
     for machine_id, proc in zip(mp.machine_ids, procs):
-        cleanup_machine(machine_id, proc, mkosi_kernel_dir)
+        cleanup_machine(machine_id, proc, mkosi_config_dir)
 
 
 @pytest.fixture(scope="session")
 def machine_pool(
     num_machines,
-    mkosi_kernel_dir,
+    mkosi_config_dir,
     mkosi_options,
     perform_once,
     lock,
@@ -451,11 +449,11 @@ def machine_pool(
         mp, procs = setup_machine_pool(
             num_machines,
             pkl_name,
-            mkosi_kernel_dir,
+            mkosi_config_dir,
             mkosi_options,
         )
 
-        wait_for_machine_pool(mp, mkosi_kernel_dir)
+        wait_for_machine_pool(mp, mkosi_config_dir)
 
         return mp
 
@@ -476,7 +474,7 @@ def machine_pool(
             if mp.finisehd_sessions == num_machines:
                 break
 
-    cleanup_machine_pool(mp, procs, mkosi_kernel_dir)
+    cleanup_machine_pool(mp, procs, mkosi_config_dir)
 
 
 @pytest.fixture
@@ -547,13 +545,13 @@ def mkosi_version(perform_once):
 
 
 @pytest.fixture(scope="session")
-def mkosi_config(mkosi_kernel_dir, mkosi_options, perform_once):
+def mkosi_config(mkosi_config_dir, mkosi_options, perform_once):
     def __mkosi_config():
         env = os.environ.copy()
         env["PAGER"] = "cat"
         return subprocess.run(
             ["mkosi", *(shlex.split(mkosi_options)), "cat-config"],
-            cwd=mkosi_kernel_dir,
+            cwd=mkosi_config_dir,
             capture_output=True,
             env=env,
         ).stdout.decode()
