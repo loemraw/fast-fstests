@@ -68,7 +68,7 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 
 | pytest.ini option | command line flag | description |
 | :- | :- | -: |
-| | -n or --numprocesses | Number of virtual machines to run. (requires pytest-xdist) |
+| | -n <br> --numprocesses | Number of virtual machines to run. (requires pytest-xdist) |
 | mkosi_config_dir | --mkosi-config-dir | Path to mkosi configuration directory. |
 | mkosi_options | --mkosi-options | Options to pass to mkosi when launching qemu. |
 | fstests_dir_host | --fstests-dir-host | Path to fstests on host. |
