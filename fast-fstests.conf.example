@@ -1,0 +1,40 @@
+[Include]
+Include=		modules/kernel
+        		modules/fstests
+[Build]
+BuildSources=	~/local/linux:kernel
+				~/local/fstests:fstests
+
+[Content]
+Ssh=			yes
+
+[Output]
+Format=			disk
+
+[Host]
+QemuMem=		10G
+QemuSmp=		8
+QemuFirmware=	linux
+QemuVsock=		yes
+QemuKvm=		yes
+QemuDrives=		fstest1:8G:images/
+				fstest2:8G:images/
+			   	fstest3:8G:images/
+			   	fstest4:8G:images/
+				fstest5:8G:images/
+				fstest6:8G:images/
+				fstest7:8G:images/
+				fstest8:8G:images/
+				fstest9:8G:images/
+QemuArgs=		-device nvme,serial=fstest1,drive=fstest1
+				-device nvme,serial=fstest2,drive=fstest2
+				-device nvme,serial=fstest3,drive=fstest3
+				-device nvme,serial=fstest4,drive=fstest4
+				-device nvme,serial=fstest5,drive=fstest5
+				-device nvme,serial=fstest6,drive=fstest6
+				-device nvme,serial=fstest7,drive=fstest7
+				-device nvme,serial=fstest8,drive=fstest8
+				-device nvme,serial=fstest9,drive=fstest9
+ExtraTrees=		~/local/mkosi-kernel/mkosi.builddir/centos~9~x86-64/fstests:/fstests
+Ephemeral=		yes
+Incremental=	yes
