@@ -273,6 +273,10 @@ def pytest_configure():
 
 """
 XDIST WORKAROUND
+
+When using pytest-xdist session scoped fixtures run once per process.
+I am leveraging FileLock to ensure that session scoped fixtures are
+only run once.
 """
 
 
