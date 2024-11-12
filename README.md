@@ -22,6 +22,7 @@ If not installed, follow [install instructions](https://github.com/systemd/mkosi
 ```
 git clone https://github.com/DaanDeMeyer/mkosi-kernel.git
 cd mkosi-kernel
+mkdir mkosi.profiles
 touch mkosi.profiles/fast-fstests.conf
 ```
 I like to create a separate profile to hold all of the mkosi configurations for running fast-fstests.
@@ -43,12 +44,31 @@ mkosi --profile fast-fstests -f build
 ```
 
 4. Ensure everything is configured properly
+* Check if fstests is working:
 ```
 mkosi --profile fast-fstests qemu
 cd /fstests
 ./check
 ```
-If ./check begins running tests everything should be configured properly for fast-fstests!
+./check should start running tests without needing to compile anything.
+* Check if ephemeral machines are working
+```
+mkosi --profile fast-fstests --machine 1 qemu
+```
+In a separate shell:
+```
+mkosi --profile fast-fstests --machine 2 qemu
+```
+Both should launch successfully.
+* Check if ssh is working
+```
+mkosi --profile fast-fstests qemu
+```
+Once qemu vm is up and running, run this in a separate shell:
+```
+mkosi ssh
+```
+Should successfully ssh into qemu vm.
 
 5. Download repo and install dependencies
 ```
