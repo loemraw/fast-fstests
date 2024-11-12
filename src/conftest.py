@@ -448,7 +448,7 @@ def machine_pool(
     procs = None
     pkl_name = "machine_pool.pkl"
 
-    def perform():
+    def __setup_machine_pool():
         nonlocal procs
         mp, procs = setup_machine_pool(
             num_machines,
@@ -461,7 +461,7 @@ def machine_pool(
 
         return mp
 
-    mp = perform_once(pkl_name, perform)
+    mp = perform_once(pkl_name, __setup_machine_pool)
     yield mp
 
     with lock(pkl_name):
