@@ -577,6 +577,7 @@ def invocation_id(
 
     def __record_invocation():
         invocation = Invocation(
+            timestamp=int(time.time()),
             python_version=sys.version,
             pytest_version=pytest.__version__,
             pytest_options=get_pytest_options,
@@ -598,14 +599,16 @@ def record_test(db_session, request: pytest.FixtureRequest, invocation_id):
 
     status = None
     return_code = None
+    summary = None
     stdout = None
     stderr = None
 
-    def record(_status, _return_code, _stdout, _stderr):
-        nonlocal status, return_code, stdout, stderr
-        status, return_code, stdout, stderr = (
+    def record(_status, _return_code, _summary, _stdout, _stderr):
+        nonlocal status, return_code, summary, stdout, stderr
+        status, return_code, summary, stdout, stderr = (
             _status,
             _return_code,
+            _summary,
             _stdout,
             _stderr,
         )
@@ -621,10 +624,12 @@ def record_test(db_session, request: pytest.FixtureRequest, invocation_id):
     db_session.add(
         TestResult(
             invocation_id=invocation_id,
+            timestamp=int(time.time()),
             name=request.node.funcargs["test"],
             time=end - start,
             status=status,
             return_code=return_code,
+            summary=summary,
             stdout=stdout,
             stderr=stderr,
         )

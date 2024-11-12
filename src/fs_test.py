@@ -22,7 +22,7 @@ def __test(test, machine_id, mkosi_config_dir, fstests_dir):
     return proc.returncode, proc.stdout, proc.stderr
 
 
-def summarize_stdout_fail(test, stdout):
+def summarize_stdout(test, stdout):
     start_token = test
     end_token = f"Ran: {test}"
     summary_pattern = re.compile(
@@ -30,7 +30,7 @@ def summarize_stdout_fail(test, stdout):
         re.DOTALL,
     )
     match = summary_pattern.search(stdout)
-    return f"\n{match.group(1).strip()}" if match else stdout
+    return f"{match.group(1).strip()}" if match else stdout
 
 
 def summarize_stdout_skip(test, stdout):
@@ -50,11 +50,13 @@ def test(test, machine_id, mkosi_config_dir, fstests_dir, record_test):
 
     skip_token = "[not run]"
     if skip_token in stdout:
-        record_test("skip", status, stdout, stderr)
-        pytest.skip(reason=summarize_stdout_skip(test, stdout))
+        summary = summarize_stdout_skip(test, stdout)
+        record_test("skip", status, summary, stdout, stderr)
+        pytest.skip(reason=summary)
 
+    summary = summarize_stdout(test, stdout)
     if status != 0:
-        record_test("fail", status, stdout, stderr)
-        assert False, summarize_stdout_fail(test, stdout)
+        record_test("fail", status, summary, stdout, stderr)
+        assert False, summary
 
-    record_test("pass", status, stdout, stderr)
+    record_test("pass", status, summary, stdout, stderr)

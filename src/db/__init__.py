@@ -8,6 +8,8 @@ class Invocation(Base):
     __tablename__ = "invocations"
 
     id = Column(Integer, primary_key=True)
+    timestamp = Column(Integer)
+
     python_version = Column(Text)
     pytest_version = Column(Text)
     pytest_options = Column(Text)
@@ -21,10 +23,12 @@ class TestResult(Base):
 
     id = Column(Integer, primary_key=True)
     invocation_id = Column(Integer, ForeignKey("invocations.id"))
+    timestamp = Column(Integer)
 
     name = Column(Text)
     time = Column(Float)
     status = Column(Text)
     return_code = Column(Integer)
+    summary = Column(Text)
     stdout = Column(Text)
     stderr = Column(Text)
