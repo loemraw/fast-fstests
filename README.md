@@ -103,3 +103,8 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 ```
 pytest -n 5 src/fs_test.py
 ```
+
+# TODO
+- [ ] Improve results db utility
+- [ ] Integrate with github actions
+- [ ] Collect speed improvement data
