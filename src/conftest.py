@@ -347,7 +347,7 @@ MACHINE
 class MachinePool:
     machine_ids: List[str]
     available_machines: List[str]
-    finisehd_sessions: int
+    finished_sessions: int
     pkl_name: str
 
 
@@ -470,7 +470,7 @@ def machine_pool(
 
     with lock(pkl_name):
         mp = lockless_load(pkl_name)
-        mp.finisehd_sessions += 1
+        mp.finished_sessions += 1
         lockless_store(pkl_name, mp)
 
     if procs is None:
@@ -479,7 +479,7 @@ def machine_pool(
     while True:
         with lock(pkl_name):
             mp = lockless_load(pkl_name)
-            if mp.finisehd_sessions == num_machines:
+            if mp.finished_sessions == num_machines:
                 break
 
     cleanup_machine_pool(mp, procs, mkosi_config_dir)
