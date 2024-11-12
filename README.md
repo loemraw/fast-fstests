@@ -8,8 +8,8 @@ fast-fstests is a tool that wraps fstests with pytest, opening up possibilities 
 * [mkosi-kernel](https://github.com/DaanDeMeyer/mkosi-kernel) (or other mkosi configuration directory)
 * [fstests](https://github.com/kdave/xfstests)
 * [pytest](https://docs.pytest.org/en/stable/getting-started.html)
-* [pytest-xdist](https://pypi.org/project/pytest-xdist/) (optional for parallel execution)
-* [SQLAlchemy](https://www.sqlalchemy.org/) (optional for storing test history)
+* [pytest-xdist](https://pypi.org/project/pytest-xdist/)
+* [SQLAlchemy](https://www.sqlalchemy.org/)
 
 ## Step by step
 1. Ensure mkosi is installed
@@ -57,7 +57,7 @@ cd fast-fstests
 pip install -r requirements.txt
 ```
 
-6. [Optional] Setup results db
+6. Setup results db
 ```
 python3 src/setup_db.py [PATH TO CREATE RESULTS DB]
 ```
@@ -68,7 +68,7 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 
 | pytest.ini option | command line flag | description |
 | :- | :- | -: |
-| | -n <br> --numprocesses | Number of virtual machines to run. (requires pytest-xdist) |
+| | -n <br> --numprocesses | Number of virtual machines to run. |
 | mkosi_config_dir | --mkosi-config-dir | Path to mkosi configuration directory. |
 | mkosi_options | --mkosi-options | Options to pass to mkosi when launching qemu. |
 | fstests_dir_host | --fstests-dir-host | Path to fstests on host. |
@@ -77,7 +77,7 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 | group | --group | Name of group to run e.g. btrfs/quick or auto. (can't be used with tests) |
 | exclude | --exclude | List of tests to exclude. |
 | random | --random | Whether to randomize the order that tests are run. |
-| results_db_path | --results-db-path | Path to results db. (requires sqlalchemy) |
+| results_db_path | --results-db-path | Path to results db. |
 
 8. Run fast-fstests
 ```
