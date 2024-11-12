@@ -57,6 +57,6 @@ def test(test, machine_id, mkosi_config_dir, fstests_dir, record_test):
     summary = summarize_stdout(test, stdout)
     if status != 0:
         record_test("fail", status, summary, stdout, stderr)
-        assert False, summary
+        pytest.fail(reason=summary, pytrace=False)
 
     record_test("pass", status, summary, stdout, stderr)
