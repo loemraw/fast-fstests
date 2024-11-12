@@ -14,6 +14,7 @@ from typing import List
 import pytest
 from filelock import FileLock
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from src.db import Invocation, TestResult
@@ -517,14 +518,6 @@ def db_sessionmaker(results_db_path):
     return sessionmaker(bind=engine)
 
 
-@pytest.fixture(scope="session")
-def db_session(db_sessionmaker):
-    if db_sessionmaker is None:
-        return
-
-    with db_sessionmaker() as session:
-        yield session
-
 
 @pytest.fixture(scope="session")
 def get_pytest_options(pytestconfig, perform_once):
@@ -569,14 +562,14 @@ def mkosi_config(mkosi_config_dir, mkosi_options, perform_once):
 
 @pytest.fixture(scope="session", autouse=True)
 def invocation_id(
-    db_session,
+    db_sessionmaker,
     get_pytest_options,
     get_pytest_invocation,
     mkosi_version,
     mkosi_config,
     perform_once,
 ):
-    if db_session is None:
+    if db_sessionmaker is None:
         return
 
     def __record_invocation():
@@ -589,16 +582,22 @@ def invocation_id(
             mkosi_version=mkosi_version,
             mkosi_config=mkosi_config,
         )
-        db_session.add(invocation)
-        db_session.commit()
-        return invocation.id
+
+        while True:
+            try:
+                with db_sessionmaker() as session:
+                    session.add(invocation)
+                    session.commit()
+                    return invocation.id
+            except OperationalError:
+                pass
 
     return perform_once("invocation_id.pkl", __record_invocation)
 
 
 @pytest.fixture(scope="function")
-def record_test(db_session, request: pytest.FixtureRequest, invocation_id):
-    if db_session is None:
+def record_test(db_sessionmaker, request: pytest.FixtureRequest, invocation_id):
+    if db_sessionmaker is None:
         return
 
     status = None
@@ -625,17 +624,23 @@ def record_test(db_session, request: pytest.FixtureRequest, invocation_id):
         # test was never recorded!
         return
 
-    db_session.add(
-        TestResult(
-            invocation_id=invocation_id,
-            timestamp=int(time.time()),
-            name=request.node.funcargs["test"],
-            time=end - start,
-            status=status,
-            return_code=return_code,
-            summary=summary,
-            stdout=stdout,
-            stderr=stderr,
-        )
-    )
-    db_session.commit()
+    while True:
+        try:
+            with db_sessionmaker() as session:
+                session.add(
+                    TestResult(
+                        invocation_id=invocation_id,
+                        timestamp=int(time.time()),
+                        name=request.node.funcargs["test"],
+                        time=end - start,
+                        status=status,
+                        return_code=return_code,
+                        summary=summary,
+                        stdout=stdout,
+                        stderr=stderr,
+                    )
+                )
+                session.commit()
+            break
+        except OperationalError:
+            pass
