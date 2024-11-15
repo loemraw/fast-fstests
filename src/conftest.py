@@ -209,7 +209,7 @@ def get_tests_for_(group, excluded_tests, fstests_dir_host):
         for line in stdout.splitlines():
             if group in line:
                 test = f"{dir}/{line.split()[0]}"
-                if test in excluded_tests or test == "#":
+                if test in excluded_tests or "#" in test:
                     continue
                 yield test
 
