@@ -18,8 +18,8 @@ handle the creation and destruction of vms.
 # fast-fstests configuration
 * fast-fstests can be configured via a pytest.ini file or via cli arguments.
 * Example included at pytest.ini.example.
-* fast-fstests options set in pytest.ini are overriden by command line flags
-unless it's a list argument in which case command line flags will append to pytest.ini options.
+* fast-fstests options set in pytest.ini are overridden by command line flags,
+unless it's a list argument, in which case command line flags will append to pytest.ini options.
 
 | pytest.ini option | command line flag | description |
 | :- | :- | -: |
@@ -50,7 +50,7 @@ it is only detailing some additional configuration needed to get mkosi working w
 It is highly recommended that before starting this guide you already have a working
 mkosi and mkosi-kernel setup that can run fstests.
 
-1. mkosi-kernel profile
+1. mkosi-kernel profile\
 I like to create a separate profile to hold all of the mkosi configurations for running fast-fstests.
 I've included an example in fast-fstests.conf.example. Some important configurations are:
 * Ssh=yes\
@@ -97,7 +97,7 @@ mkosi ssh
 ```
 Should successfully ssh into qemu vm.
 
-6. Install dependencies
+6. Install dependencies\
 Make sure pytest, pytest-xdist are installed.
 ```
 cd .../fast-fstests
