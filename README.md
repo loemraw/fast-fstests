@@ -88,7 +88,7 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 
 | pytest.ini option | command line flag | description |
 | :- | :- | -: |
-| targetpaths | --targetpath | Specify targetpaths to run fstests on. HOSTNAME:PATH-TO-FSTESTS eg. vm1:/home/fstests |
+| targetpaths | --targetpath | Specify targetpaths to run fstests on.<br>HOSTNAME:PATH-TO-FSTESTS eg. vm1:/home/fstests |
 | mkosi | --mkosi | Specify the number of mkosi hosts to create. |
 | mkosi_config_dir | --mkosi-config-dir | Path to mkosi configuration directory. |
 | mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
