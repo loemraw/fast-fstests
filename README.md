@@ -5,6 +5,20 @@ It leverages multiple machines allowing for parallel testing.
 This can be configured optionally with mkosi to automatically
 handle the creation and destruction of vms.
 
+# How much faster?
+Runtime data in seconds collected on my machine.
+| group | fstests (s) | fast-fstests 5vms (s) | fast-fstests 10vms (s) | fast-fstests 15vms (s) | fast-fstests 20vms (s) | fast-fstests 25vms (s) | fast-fstests 30vms (s) |
+| - | - | - | - | - | - | - | - |
+| auto* | 5780 | 1620 | 1090 | 920 | 870 | 840 | 950 |
+| quick | 1500 | 680 | 540 | 490 | 435 | 425 | 450 |
+| btrfs/auto* | 1470 | 430 | 310 | 255 | 310 | 310 | 285 |
+| btrfs/quick | 390 | 170 | 120 | 125 | 105 | 110 | 110 |
+
+*I excluded btrfs/187 and generic/562 as they are outliers that take around 30min on my machine.\
+
+There is between a 3-7x speed improvement, bringing down the time to run auto from 96 minutes to 14 minutes.
+
+
 # Getting started with fast-fstests!
 ## fast-fstests relies on:
 * [fstests](https://github.com/kdave/xfstests)
@@ -97,8 +111,7 @@ mkosi ssh
 ```
 Should successfully ssh into qemu vm.
 
-6. Install dependencies\
-Make sure pytest, pytest-xdist are installed.
+6. Install dependencies
 ```
 cd .../fast-fstests
 pip install pytest
