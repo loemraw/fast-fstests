@@ -24,6 +24,7 @@ There is between a 3-7x speed improvement, bringing down the time to run auto fr
 * [fstests](https://github.com/kdave/xfstests)
 * [pytest](https://docs.pytest.org/en/stable/getting-started.html)
 * [pytest-xdist](https://pypi.org/project/pytest-xdist/) - for parallelizing pytest
+* [filelock](https://pypi.org/project/filelock/) - locking mechanism for parallel tests
 ## fast-fstests optionally uses:
 * [mkosi](https://github.com/systemd/mkosi) - for managing virtual machines
 * [mkosi-kernel](https://github.com/DaanDeMeyer/mkosi-kernel) - for configuring mkosi
@@ -55,7 +56,8 @@ unless it's a list argument, in which case command line flags will append to pyt
 cd .../fast-fstests
 pip install pytest
 pip install pytest-xdist
-pytest src/fast-fstests.py --targetpath host1:/fstests --targetpath host2:/fstests --group btrfs/auto
+pip install filelock
+pytest src/fast-fstests.py --targetpath host1:/fstests --targetpath host2:/home/fstests --group btrfs/auto
 ```
 
 # Running with mkosi
