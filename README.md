@@ -14,7 +14,7 @@ Runtime data in seconds collected on my machine.
 | btrfs/auto* | 1470 | 430 | 310 | 255 | 310 | 310 | 285 |
 | btrfs/quick | 390 | 170 | 120 | 125 | 105 | 110 | 110 |
 
-*I excluded btrfs/187 and generic/562 as they are outliers that take around 30min on my machine.\
+*I excluded btrfs/187 and generic/562 as they are outliers that take around 30min on my machine.
 
 There is between a 3-7x speed improvement, bringing down the time to run auto from 96 minutes to 14 minutes.
 
@@ -23,10 +23,10 @@ There is between a 3-7x speed improvement, bringing down the time to run auto fr
 ## fast-fstests relies on:
 * [fstests](https://github.com/kdave/xfstests)
 * [pytest](https://docs.pytest.org/en/stable/getting-started.html)
+* [pytest-xdist](https://pypi.org/project/pytest-xdist/) - for parallelizing pytest
 ## fast-fstests optionally uses:
 * [mkosi](https://github.com/systemd/mkosi) - for managing virtual machines
 * [mkosi-kernel](https://github.com/DaanDeMeyer/mkosi-kernel) - for configuring mkosi
-* [pytest-xdist](https://pypi.org/project/pytest-xdist/) - for parallelizing pytest
 * [SQLAlchemy](https://www.sqlalchemy.org/) - for keeping track of test results
 
 # fast-fstests configuration
@@ -52,8 +52,10 @@ unless it's a list argument, in which case command line flags will append to pyt
 
 # Run fast-fstests
 ```
-pip install -r requirements.txt
-pytest src/fast-fstests.py --targetpath host1:/fstests --group btrfs/auto
+cd .../fast-fstests
+pip install pytest
+pip install pytest-xdist
+pytest src/fast-fstests.py --targetpath host1:/fstests --targetpath host2:/fstests --group btrfs/auto
 ```
 
 # Running with mkosi
@@ -111,14 +113,7 @@ mkosi ssh
 ```
 Should successfully ssh into qemu vm.
 
-6. Install dependencies
-```
-cd .../fast-fstests
-pip install pytest
-pip install pytest-xdist
-```
-
-7. If all steps above are working you should be good to go!
+6. If all steps above are working you should be good to go!
 ```
 pytest src/fast-fstests.py --mkosi 5 --group btrfs/auto
 ```
