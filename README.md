@@ -103,7 +103,7 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 
 8. Run fast-fstests
 ```
-pytest src/fs_test.py --mkosi 5 --targetpath vm1:/fstests --group btrfs/auto
+pytest src/fs_test.py --mkosi 5 --targetpath host1:/fstests --group btrfs/auto
 ```
 
 # TODO
