@@ -6,10 +6,9 @@ import shlex
 import subprocess
 import sys
 import time
-import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import List
+from typing import List, Sequence, Union
 
 import pytest
 from filelock import FileLock
@@ -27,6 +26,34 @@ PYTEST OPTIONS
 @pytest.hookimpl
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
+        "--targetpath",
+        action="append",
+        default=[],
+        help="Specify ssh target and fstests path. Can be specified multiple times.\n"
+        "eg. devvm:/home/fstests",
+    )
+    parser.addini(
+        "targetpaths",
+        type="linelist",
+        default=[],
+        help="Specify ssh target and fstests path. Can be specified multiple times.\n"
+        "eg. devvm:/home/fstests",
+    )
+
+    parser.addoption(
+        "--mkosi",
+        action="store",
+        default=None,
+        help="Specify number of mkosi hosts to use.",
+    )
+    parser.addini(
+        "mkosi",
+        type="string",
+        default=None,
+        help="Specify number of mkosi hosts to use.",
+    )
+
+    parser.addoption(
         "--mkosi-config-dir",
         action="store",
         default=None,
@@ -40,68 +67,68 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
-        "--mkosi-options",
-        action="store",
-        default=None,
+        "--mkosi-option",
+        action="append",
+        default=[],
         help="Options to pass to mkosi",
     )
     parser.addini(
         "mkosi_options",
         type="linelist",
-        default=None,
+        default=[],
         help="Options to pass to mkosi",
     )
 
     parser.addoption(
-        "--fstests-dir-host",
-        action="store",
-        default=None,
-        help="Path to fstests source on host",
-    )
-    parser.addini(
-        "fstests_dir_host",
-        type="string",
-        default=None,
-        help="Path to fstests source on host",
-    )
-
-    parser.addoption(
-        "--fstests-dir-machine",
+        "--mkosi-fstests-dir",
         action="store",
         default=None,
         help="Path to fstests source on vm",
     )
     parser.addini(
-        "fstests_dir_machine",
+        "mkosi_fstests_dir",
         type="string",
         default=None,
         help="Path to fstests source on vm",
     )
 
     parser.addoption(
-        "--tests",
+        "--host-fstests-dir",
+        action="store",
+        default=None,
+        help="Path to fstests source on host",
+    )
+    parser.addini(
+        "host_fstests_dir",
+        type="string",
+        default=None,
+        help="Path to fstests source on host",
+    )
+
+    parser.addoption(
+        "--test",
         action="append",
-        default=None,
-        help="List of individual tests to run (can't be used with group)",
+        default=[],
+        help="Individual test to run (can't be used with group). Can be specified multiple times.",
     )
     parser.addini(
         "tests",
-        type="args",
-        default=None,
-        help="List of individual tests to run (can't be used with group)",
+        type="linelist",
+        default=[],
+        help="Individual tests to run (can't be used with group).",
     )
 
     parser.addoption(
         "--exclude",
         action="append",
-        default=None,
-        help="List of individual tests to not run",
+        default=[],
+        help="Individual test to exclude. Can be specified multiple times.",
     )
     parser.addini(
-        "exclude",
-        type="args",
-        default=None,
-        help="List of individual tests to not run",
+        "excludes",
+        type="linelist",
+        default=[],
+        help="List of individual tests to exclude",
     )
 
     parser.addoption(
@@ -120,13 +147,13 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--random",
         action="store_true",
-        default=None,
+        default=False,
         help="Randomize the order of tests.",
     )
     parser.addini(
         "random",
         type="bool",
-        default=None,
+        default=False,
         help="Randomize the order of tests.",
     )
 
@@ -144,41 +171,65 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
 
+def __num_machines(config):
+    num_mkosis = __num_mkosi(config)
+    targetpaths = __targetpaths(config)
+
+    if num_mkosis + len(targetpaths) == 0:
+        raise ValueError("no vms specified")
+
+    num_machines = 0
+
+    if num_mkosis is not None:
+        num_machines += num_mkosis
+    if targetpaths is not None:
+        num_machines += len(targetpaths)
+
+    return num_machines
+
+
+def __num_mkosi(config):
+    if (num := config.getoption("--mkosi")) is not None:
+        return int(num)
+    if (num := config.getini("mkosi")) is not None:
+        return int(num)
+    return 0
+
+
 @pytest.fixture(scope="session")
-def num_machines():
-    if (num_processes := os.getenv("PYTEST_XDIST_WORKER_COUNT")) is None:
-        return 1
-    return int(num_processes)
+def num_mkosi(request):
+    return __num_mkosi(request.config)
+
+
+def __targetpaths(config):
+    return config.getoption("--targetpath") + config.getini("targetpaths")
+
+
+@pytest.fixture(scope="session")
+def targetpaths(request):
+    return __targetpaths(request.config)
 
 
 @pytest.fixture(scope="session")
 def mkosi_config_dir(request):
-    dir = request.config.getoption(
+    return request.config.getoption(
         "--mkosi-config-dir"
     ) or request.config.getini("mkosi_config_dir")
-    if dir is None:
-        raise ValueError("mkosi-config-dir not specified!")
-    return dir
 
 
 @pytest.fixture(scope="session")
 def mkosi_options(request):
-    if (options := request.config.getoption("--mkosi-options")) is not None:
-        return options
-    if (options := request.config.getini("mkosi_options")) is not None:
-        return " ".join(options)
-
-    return ""
+    return " ".join(
+        request.config.getoption("--mkosi-option")
+        + request.config.getini("mkosi_options")
+    )
 
 
 @pytest.fixture(scope="session")
-def fstests_dir(request):
-    dir = request.config.getoption(
-        "--fstests-dir-machine"
-    ) or request.config.getini("fstests_dir_machine")
-    if dir is None:
-        raise ValueError("fstests-dir-machine not specified!")
-    return dir
+def mkosi_fstests_dir(request):
+    return request.config.getoption(
+        "--mkosi-fstests-dir"
+    ) or request.config.getini("mkosi_fstests_dir")
 
 
 @pytest.fixture(scope="session")
@@ -193,7 +244,7 @@ COLLECT TESTS
 """
 
 
-def get_tests_for_(group, excluded_tests, fstests_dir_host):
+def get_tests_for_(group, fstests_dir_host):
     def tests_for_(dir, group):
         proc = subprocess.run(
             "../../tools/mkgroupfile",
@@ -209,7 +260,7 @@ def get_tests_for_(group, excluded_tests, fstests_dir_host):
         for line in stdout.splitlines():
             if group in line:
                 test = f"{dir}/{line.split()[0]}"
-                if test in excluded_tests or "#" in test:
+                if "#" in test:
                     continue
                 yield test
 
@@ -226,35 +277,36 @@ def get_tests_for_(group, excluded_tests, fstests_dir_host):
 
 
 @pytest.hookimpl
-def pytest_generate_tests(metafunc: pytest.Metafunc):
-    group = metafunc.config.getoption("--group")
-    tests = metafunc.config.getoption("--tests")
+def pytest_generate_tests(metafunc):
+    group = metafunc.config.getoption("--group") or metafunc.config.getini(
+        "group"
+    )
+    tests = metafunc.config.getoption("--test") + metafunc.config.getini(
+        "tests"
+    )
 
-    if group is None and tests is None:
-        group = metafunc.config.getini("group")
-        tests = metafunc.config.getini("tests")
-
-        if group is None and tests is None:
-            raise ValueError("no tests specified!")
+    if group is None and not tests:
+        raise ValueError("no tests specified")
 
     if group and tests:
-        raise ValueError("cannot specify both suite and tests!")
+        raise ValueError("cannot specify both suite and tests")
 
-    if isinstance(group, str):
+    if group:
         fstests_dir_host = metafunc.config.getoption(
-            "--fstests-dir-host"
-        ) or metafunc.config.getini("fstests_dir_host")
+            "--host-fstests-dir"
+        ) or metafunc.config.getini("host_fstests_dir")
 
         if not isinstance(fstests_dir_host, str):
-            raise ValueError("fstests_dir_host not specified!")
+            raise ValueError("host-fstests-dir not specified")
 
-        excluded_tests = metafunc.config.getoption(
-            "--exclude"
-        ) or metafunc.config.getini("exclude")
-
-        tests = get_tests_for_(group, excluded_tests, fstests_dir_host)
+        tests = get_tests_for_(group, fstests_dir_host)
 
     assert isinstance(tests, list)
+
+    excluded_tests = metafunc.config.getoption(
+        "--exclude"
+    ) + metafunc.config.getini("excludes")
+    tests = [test for test in tests if test not in excluded_tests]
 
     should_randomize = metafunc.config.getoption(
         "--random"
@@ -267,11 +319,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     metafunc.parametrize("test", tests)
 
 
-def pytest_configure():
-    if "PYTEST_XDIST_WORKER" not in os.environ:
-        os.environ["RANDOM_SEED"] = str(random.random())
-
-
 """
 XDIST WORKAROUND
 
@@ -279,6 +326,24 @@ When using pytest-xdist session scoped fixtures run once per process.
 I am leveraging FileLock to ensure that session scoped fixtures are
 only run once.
 """
+
+
+def __is_main_process():
+    return "PYTEST_XDIST_WORKER" not in os.environ
+
+
+def pytest_configure():
+    if __is_main_process():
+        os.environ["RANDOM_SEED"] = str(random.random())
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_cmdline_main(config):
+    try:
+        if config.option.numprocesses is None and __is_main_process():
+            config.option.numprocesses = __num_machines(config)
+    except AttributeError:
+        pass
 
 
 @pytest.fixture(scope="session")
@@ -345,14 +410,27 @@ MACHINE
 
 
 @dataclass
+class MkosiMachine:
+    machine_id: str
+
+
+@dataclass
+class TargetPathMachine:
+    target: str
+    path: str
+
+
+Machine = Union[MkosiMachine, TargetPathMachine]
+
+
+@dataclass
 class MachinePool:
-    machine_ids: List[str]
-    available_machines: List[str]
+    available_machines: List[Machine]
     finished_sessions: int
     pkl_name: str
 
 
-def setup_machine(machine_id, mkosi_config_dir, mkosi_options):
+def setup_mkosi_machine(machine_id, mkosi_config_dir, mkosi_options):
     proc = subprocess.Popen(
         [
             "mkosi",
@@ -370,48 +448,10 @@ def setup_machine(machine_id, mkosi_config_dir, mkosi_options):
     return proc
 
 
-def setup_machine_pool(
-    num_machines: int,
-    pkl_name: str,
-    mkosi_config_dir,
-    mkosi_options,
+def cleanup_mkosi_machine(
+    machine_id: str, proc: subprocess.Popen, mkosi_config_dir
 ):
-    machine_ids = list(map(str, range(num_machines)))
-    procs = []
-    for machine_id in machine_ids:
-        procs.append(
-            setup_machine(machine_id, mkosi_config_dir, mkosi_options)
-        )
-
-    return MachinePool(machine_ids, [], 0, pkl_name), procs
-
-
-def wait_for_machine_pool(mp: MachinePool, mkosi_config_dir):
-    while len(mp.available_machines) != len(mp.machine_ids):
-        for machine_id in mp.machine_ids:
-            if machine_id in mp.available_machines:
-                continue
-
-            proc = subprocess.run(
-                [
-                    "mkosi",
-                    "--machine",
-                    machine_id,
-                    "ssh",
-                    "echo POKE",
-                ],
-                cwd=mkosi_config_dir,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-            if proc.returncode == 0:
-                mp.available_machines.append(machine_id)
-
-
-def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_config_dir):
-    poweroff_proc = subprocess.run(
+    poweroff_status = subprocess.run(
         [
             "mkosi",
             "--machine",
@@ -423,9 +463,9 @@ def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_config_dir):
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-    )
+    ).returncode
 
-    if poweroff_proc.returncode == 0:
+    if poweroff_status == 0:
         return
 
     proc.terminate()
@@ -435,14 +475,68 @@ def cleanup_machine(machine_id: str, proc: subprocess.Popen, mkosi_config_dir):
         pass
 
 
-def cleanup_machine_pool(mp, procs, mkosi_config_dir):
-    for machine_id, proc in zip(mp.machine_ids, procs):
-        cleanup_machine(machine_id, proc, mkosi_config_dir)
+def setup_mkosi_machines(
+    machines: Sequence[MkosiMachine],
+    mkosi_config_dir,
+    mkosi_options,
+):
+    if len(machines) > 0 and mkosi_config_dir is None:
+        raise ValueError("must configure mkosi-config-dir when using mkosi")
+
+    procs = []
+    for machine in machines:
+        procs.append(
+            setup_mkosi_machine(
+                machine.machine_id, mkosi_config_dir, mkosi_options
+            )
+        )
+
+    return procs
+
+
+def wait_for_mkosi_machines(
+    machines: Sequence[MkosiMachine],
+    machine_pool: MachinePool,
+    mkosi_config_dir,
+):
+    active_machines = 0
+    while active_machines < len(machines):
+        for machine in machines:
+            if machine in machine_pool.available_machines:
+                continue
+
+            proc = subprocess.run(
+                [
+                    "mkosi",
+                    "--machine",
+                    machine.machine_id,
+                    "ssh",
+                    "echo POKE",
+                ],
+                cwd=mkosi_config_dir,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            if proc.returncode == 0:
+                machine_pool.available_machines.append(machine)
+                active_machines += 1
+
+
+def cleanup_mkosi_machines(
+    machines: Sequence[MkosiMachine],
+    procs: Sequence[subprocess.Popen],
+    mkosi_config_dir,
+):
+    for machine, proc in zip(machines, procs):
+        cleanup_mkosi_machine(machine.machine_id, proc, mkosi_config_dir)
 
 
 @pytest.fixture(scope="session")
 def machine_pool(
-    num_machines,
+    num_mkosi,
+    targetpaths,
     mkosi_config_dir,
     mkosi_options,
     perform_once,
@@ -451,57 +545,107 @@ def machine_pool(
     lockless_store,
 ):
     procs = None
+    mkosi_machines = None
     pkl_name = "machine_pool.pkl"
 
     def __setup_machine_pool():
-        nonlocal procs
-        mp, procs = setup_machine_pool(
-            num_machines,
-            pkl_name,
+        nonlocal procs, mkosi_machines
+
+        mkosi_machines = [MkosiMachine(str(i)) for i in range(num_mkosi)]
+        procs = setup_mkosi_machines(
+            mkosi_machines,
             mkosi_config_dir,
             mkosi_options,
         )
 
-        wait_for_machine_pool(mp, mkosi_config_dir)
+        machine_pool = MachinePool(
+            [TargetPathMachine(*t.split(":")) for t in targetpaths],
+            0,
+            pkl_name,
+        )
 
-        return mp
+        wait_for_mkosi_machines(mkosi_machines, machine_pool, mkosi_config_dir)
+        return machine_pool
 
-    mp = perform_once(pkl_name, __setup_machine_pool)
-    yield mp
+    machine_pool = perform_once(pkl_name, __setup_machine_pool)
+    yield machine_pool
 
     with lock(pkl_name):
-        mp = lockless_load(pkl_name)
-        mp.finished_sessions += 1
-        lockless_store(pkl_name, mp)
+        machine_pool = lockless_load(pkl_name)
+        machine_pool.finished_sessions += 1
+        lockless_store(pkl_name, machine_pool)
 
-    if procs is None:
+    if procs is None or mkosi_machines is None:
         return
 
     while True:
         with lock(pkl_name):
-            mp = lockless_load(pkl_name)
-            if mp.finished_sessions == num_machines:
+            machine_pool = lockless_load(pkl_name)
+            if machine_pool.finished_sessions == num_mkosi + len(targetpaths):
                 break
 
-    cleanup_machine_pool(mp, procs, mkosi_config_dir)
+    cleanup_mkosi_machines(mkosi_machines, procs, mkosi_config_dir)
 
 
 @pytest.fixture
-def machine_id(machine_pool: MachinePool, lock, lockless_load, lockless_store):
-    machine_id = None
-    while machine_id is None:
+def run_test_(
+    machine_pool: MachinePool,
+    lock,
+    lockless_load,
+    lockless_store,
+    mkosi_config_dir,
+    mkosi_fstests_dir,
+):
+    machine = None
+    while machine is None:
         with lock(machine_pool.pkl_name):
             machine_pool = lockless_load(machine_pool.pkl_name)
+            assert isinstance(machine_pool, MachinePool)
             if machine_pool.available_machines:
-                machine_id = machine_pool.available_machines.pop()
+                machine = machine_pool.available_machines.pop()
             lockless_store(machine_pool.pkl_name, machine_pool)
 
-    yield machine_id
+    def __run_test_(test):
+        if isinstance(machine, MkosiMachine):
+            if mkosi_fstests_dir is None:
+                raise ValueError("must specify path to fstests for mkosi")
+
+            proc = subprocess.run(
+                [
+                    "mkosi",
+                    "--machine",
+                    machine.machine_id,
+                    "ssh",
+                    f"cd {mkosi_fstests_dir} ; ./check {test}",
+                ],
+                cwd=mkosi_config_dir,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            return proc.returncode, proc.stdout, proc.stderr
+
+        elif isinstance(machine, TargetPathMachine):
+            proc = subprocess.run(
+                [
+                    "ssh",
+                    machine.target,
+                    f"cd {machine.path} ; sudo ./check {test}",
+                ],
+                cwd=mkosi_config_dir,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            return proc.returncode, proc.stdout, proc.stderr
+
+    yield __run_test_
 
     with lock(machine_pool.pkl_name):
         machine_pool = lockless_load(machine_pool.pkl_name)
-        assert isinstance(machine_id, str)
-        machine_pool.available_machines.append(machine_id)
+        machine_pool.available_machines.append(machine)
         lockless_store(machine_pool.pkl_name, machine_pool)
 
 
@@ -516,7 +660,6 @@ def db_sessionmaker(results_db_path):
         return
     engine = create_engine(f"sqlite:///{results_db_path}")
     return sessionmaker(bind=engine)
-
 
 
 @pytest.fixture(scope="session")
@@ -596,7 +739,9 @@ def invocation_id(
 
 
 @pytest.fixture(scope="function")
-def record_test(db_sessionmaker, request: pytest.FixtureRequest, invocation_id):
+def record_test(
+    db_sessionmaker, request: pytest.FixtureRequest, invocation_id
+):
     if db_sessionmaker is None:
         return
 

@@ -88,20 +88,22 @@ All fast-fstests options set in pytest.ini can be overriden using command line f
 
 | pytest.ini option | command line flag | description |
 | :- | :- | -: |
-| | -n <br> --numprocesses | Number of virtual machines to run. |
+| targetpaths | --targetpath | Specify targetpaths to run fstests on. HOSTNAME:PATH-TO-FSTESTS eg. vm1:/home/fstests |
+| mkosi | --mkosi | Specify the number of mkosi hosts to create. |
 | mkosi_config_dir | --mkosi-config-dir | Path to mkosi configuration directory. |
-| mkosi_options | --mkosi-options | Options to pass to mkosi when launching qemu. |
-| fstests_dir_host | --fstests-dir-host | Path to fstests on host. |
-| fstests_dir_machine | --fstests-dir-machine | Path to fstests on virtual machine. |
-| tests | --tests | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
+| mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
+| mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
+| mkosi_fstests_dir | --mkosi-fstests-dir | Path to fstests on mkosi. |
+| host_fstests_dir | --host-fstests-dir | Path to fstests on host. |
+| tests | --test | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
 | group | --group | Name of group to run e.g. btrfs/quick or auto. (can't be used with tests) |
-| exclude | --exclude | List of tests to exclude. |
+| excludes | --exclude | List of tests to exclude. |
 | random | --random | Whether to randomize the order that tests are run. |
 | results_db_path | --results-db-path | Path to results db. |
 
 8. Run fast-fstests
 ```
-pytest -n 5 src/fs_test.py
+pytest src/fs_test.py --mkosi 5 --targetpath vm1:/fstests --group btrfs/auto
 ```
 
 # TODO

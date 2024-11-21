@@ -1,25 +1,6 @@
 import re
-import subprocess
 
 import pytest
-
-
-def __test(test, machine_id, mkosi_config_dir, fstests_dir):
-    proc = subprocess.run(
-        [
-            "mkosi",
-            "--machine",
-            machine_id,
-            "ssh",
-            f"cd {fstests_dir} ; ./check {test}",
-        ],
-        cwd=mkosi_config_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    return proc.returncode, proc.stdout, proc.stderr
 
 
 def summarize_stdout(test, stdout):
@@ -40,10 +21,8 @@ def summarize_stdout_skip(test, stdout):
     return f"{test}: {match.group(1).strip() if match else stdout}"
 
 
-def test(test, machine_id, mkosi_config_dir, fstests_dir, record_test):
-    status, stdout, stderr = __test(
-        test, machine_id, mkosi_config_dir, fstests_dir
-    )
+def test(test, run_test_, record_test):
+    status, stdout, stderr = run_test_(test)
 
     stdout = stdout.decode()
     stderr = stderr.decode()
