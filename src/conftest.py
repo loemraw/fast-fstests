@@ -335,16 +335,15 @@ def __is_main_process():
     return "PYTEST_XDIST_WORKER" not in os.environ
 
 
-def pytest_configure(config):
+def pytest_configure():
     if __is_main_process():
         os.environ["RANDOM_SEED"] = str(random.random())
 
     worker_id = os.environ.get("PYTEST_XDIST_WORKER")
-    if worker_id is not None:
-        logging.basicConfig(
-            filename=f"logs/tests_{worker_id}.log",
-            level=logging.INFO,
-        )
+    logging.basicConfig(
+        filename=f"logs/tests_{worker_id if worker_id is not None else '0'}.log",
+        level=logging.INFO,
+    )
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -548,7 +547,7 @@ def wait_for_mkosi_machines(
 
 def cleanup_mkosi_machines(
     machines: Sequence[MkosiMachine],
-    procs: Sequence[subprocess.Popen],
+    procs: Sequence[subprocess.Popen[bytes]],
     mkosi_config_dir,
 ):
     logger.info("cleaning up machines...")
@@ -556,8 +555,8 @@ def cleanup_mkosi_machines(
         logger.info(
             "cleaning up mkosi machine %s w/ output %s %s",
             machine.machine_id,
-            proc.stdout.decode(),
-            proc.stderr.decode(),
+            proc.stdout,
+            proc.stderr,
         )
         cleanup_mkosi_machine(machine.machine_id, proc, mkosi_config_dir)
 
@@ -761,7 +760,7 @@ def invocation_id(
                 session.commit()
                 return invocation.id
         except OperationalError:
-            logger.info("failed to record invocation %s", str(invocation))
+            logger.exception("failed to record invocation")
 
     return perform_once("invocation_id.pkl", __record_invocation)
 
@@ -814,4 +813,4 @@ def record_test(
             session.add(test_result)
             session.commit()
     except OperationalError:
-        logger.info("failed to record test %s", str(test_result))
+        logger.exception("failed to record test")
