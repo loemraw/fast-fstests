@@ -44,6 +44,7 @@ unless it's a list argument, in which case command line flags will append to pyt
 | mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
 | mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
 | mkosi_fstests_dir | --mkosi-fstests-dir | Path to fstests on mkosi. |
+| mkosi_setup_timeout | --mkosi-setup-timeout | How long to wait in seconds for mkosi setup before aborting. (default 60s) |
 | host_fstests_dir | --host-fstests-dir | Path to fstests on host. |
 | tests | --test | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
 | group | --group | Name of group to run e.g. btrfs/quick or auto. (can't be used with tests) |

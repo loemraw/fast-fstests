@@ -96,6 +96,19 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
+        "--mkosi-setup-timeout",
+        action="store",
+        default=None,
+        help="How long to wait in seconds for mkosi setup before aborting",
+    )
+    parser.addini(
+        "mkosi_setup_timeout",
+        type="string",
+        default=60,
+        help="How long to wait in seconds for mkosi setup before aborting (default 60s)",
+    )
+
+    parser.addoption(
         "--host-fstests-dir",
         action="store",
         default=None,
@@ -233,6 +246,13 @@ def mkosi_fstests_dir(request):
     return request.config.getoption(
         "--mkosi-fstests-dir"
     ) or request.config.getini("mkosi_fstests_dir")
+
+
+@pytest.fixture(scope="session")
+def mkosi_setup_timeout(request):
+    return int(request.config.getoption(
+        "--mkosi-setup-timeout"
+    ) or request.config.getini("mkosi_setup_timeout"))
 
 
 @pytest.fixture(scope="session")
@@ -507,17 +527,28 @@ def setup_mkosi_machines(
 
 def wait_for_mkosi_machines(
     machines: Sequence[MkosiMachine],
+    procs: Sequence[subprocess.Popen],
     machine_pool: MachinePool,
     mkosi_config_dir,
+    mkosi_setup_timeout,
 ):
     logger.debug("waiting for mkosi machines...")
     active_machines = 0
-    while active_machines < len(machines):
-        time.sleep(2)
+    for _ in range(mkosi_setup_timeout):
+        time.sleep(1)
+
+        if active_machines == len(machines):
+            return
+
         logger.debug("active machines %d", active_machines)
-        for machine in machines:
+        for machine, mkosi_proc in zip(machines, procs):
             if machine in machine_pool.available_machines:
                 continue
+
+            if mkosi_proc.poll() is not None:
+                raise ValueError(
+                    "failed to launch mkosi %s", machine.machine_id
+                )
 
             logger.debug("poking machine %s", machine.machine_id)
             proc = subprocess.run(
@@ -545,10 +576,12 @@ def wait_for_mkosi_machines(
                 machine_pool.available_machines.append(machine)
                 active_machines += 1
 
+    raise ValueError("mkosi setup took too long")
+
 
 def cleanup_mkosi_machines(
     machines: Sequence[MkosiMachine],
-    procs: Sequence[subprocess.Popen[bytes]],
+    procs: Sequence[subprocess.Popen],
     mkosi_config_dir,
 ):
     logger.debug("cleaning up machines...")
@@ -568,6 +601,7 @@ def machine_pool(
     targetpaths,
     mkosi_config_dir,
     mkosi_options,
+    mkosi_setup_timeout,
     perform_once,
     lock,
     lockless_load,
@@ -593,7 +627,13 @@ def machine_pool(
             pkl_name,
         )
 
-        wait_for_mkosi_machines(mkosi_machines, machine_pool, mkosi_config_dir)
+        wait_for_mkosi_machines(
+            mkosi_machines,
+            procs,
+            machine_pool,
+            mkosi_config_dir,
+            mkosi_setup_timeout,
+        )
         return machine_pool
 
     machine_pool = perform_once(pkl_name, __setup_machine_pool)
