@@ -17,4 +17,4 @@ excludes=           btrfs/187
 
 results_db_path=    results/results.db
 
-addopts=            -rsf
+addopts=            -rsf --log-level WARNING 

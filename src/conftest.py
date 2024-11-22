@@ -340,10 +340,11 @@ def pytest_configure():
         os.environ["RANDOM_SEED"] = str(random.random())
 
     worker_id = os.environ.get("PYTEST_XDIST_WORKER")
-    logging.basicConfig(
-        filename=f"logs/tests_{worker_id if worker_id is not None else '0'}.log",
-        level=logging.INFO,
-    )
+    if worker_id is not None:
+        logging.basicConfig(
+            filename=f"logs/tests_{worker_id}.log",
+            level=logging.INFO,
+        )
 
 
 @pytest.hookimpl(tryfirst=True)
