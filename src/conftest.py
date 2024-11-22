@@ -335,7 +335,7 @@ def __is_main_process():
     return "PYTEST_XDIST_WORKER" not in os.environ
 
 
-def pytest_configure():
+def pytest_configure(config):
     if __is_main_process():
         os.environ["RANDOM_SEED"] = str(random.random())
 
@@ -343,7 +343,7 @@ def pytest_configure():
     if worker_id is not None:
         logging.basicConfig(
             filename=f"logs/tests_{worker_id}.log",
-            level=logging.INFO,
+            level=config.option.log_file_level,
         )
 
 
@@ -441,7 +441,7 @@ class MachinePool:
 
 
 def setup_mkosi_machine(machine_id, mkosi_config_dir, mkosi_options):
-    logger.info("setting up mkosi machine %s", machine_id)
+    logger.debug("setting up mkosi machine %s", machine_id)
     proc = subprocess.Popen(
         [
             "mkosi",
@@ -510,16 +510,16 @@ def wait_for_mkosi_machines(
     machine_pool: MachinePool,
     mkosi_config_dir,
 ):
-    logger.info("waiting for mkosi machines...")
+    logger.debug("waiting for mkosi machines...")
     active_machines = 0
     while active_machines < len(machines):
         time.sleep(2)
-        logger.info("active machines %d", active_machines)
+        logger.debug("active machines %d", active_machines)
         for machine in machines:
             if machine in machine_pool.available_machines:
                 continue
 
-            logger.info("poking machine %s", machine.machine_id)
+            logger.debug("poking machine %s", machine.machine_id)
             proc = subprocess.run(
                 [
                     "mkosi",
@@ -533,7 +533,7 @@ def wait_for_mkosi_machines(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            logger.info(
+            logger.debug(
                 "machine %s status %s %s",
                 machine.machine_id,
                 proc.stdout.decode(),
@@ -541,7 +541,7 @@ def wait_for_mkosi_machines(
             )
 
             if proc.returncode == 0:
-                logger.info("machine %s is ready", machine.machine_id)
+                logger.debug("machine %s is ready", machine.machine_id)
                 machine_pool.available_machines.append(machine)
                 active_machines += 1
 
@@ -551,9 +551,9 @@ def cleanup_mkosi_machines(
     procs: Sequence[subprocess.Popen[bytes]],
     mkosi_config_dir,
 ):
-    logger.info("cleaning up machines...")
+    logger.debug("cleaning up machines...")
     for machine, proc in zip(machines, procs):
-        logger.info(
+        logger.debug(
             "cleaning up mkosi machine %s w/ output %s %s",
             machine.machine_id,
             proc.stdout,
