@@ -755,14 +755,13 @@ def invocation_id(
             mkosi_config=mkosi_config,
         )
 
-        while True:
-            try:
-                with db_sessionmaker() as session:
-                    session.add(invocation)
-                    session.commit()
-                    return invocation.id
-            except OperationalError:
-                pass
+        try:
+            with db_sessionmaker() as session:
+                session.add(invocation)
+                session.commit()
+                return invocation.id
+        except OperationalError:
+            logger.info("failed to record invocation %s", str(invocation))
 
     return perform_once("invocation_id.pkl", __record_invocation)
 
@@ -798,23 +797,21 @@ def record_test(
         # test was never recorded!
         return
 
-    while True:
-        try:
-            with db_sessionmaker() as session:
-                session.add(
-                    TestResult(
-                        invocation_id=invocation_id,
-                        timestamp=int(time.time()),
-                        name=request.node.funcargs["test"],
-                        time=end - start,
-                        status=status,
-                        return_code=return_code,
-                        summary=summary,
-                        stdout=stdout,
-                        stderr=stderr,
-                    )
-                )
-                session.commit()
-            break
-        except OperationalError:
-            pass
+    test_result = TestResult(
+        invocation_id=invocation_id,
+        timestamp=int(time.time()),
+        name=request.node.funcargs["test"],
+        time=end - start,
+        status=status,
+        return_code=return_code,
+        summary=summary,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    try:
+        with db_sessionmaker() as session:
+            session.add(test_result)
+            session.commit()
+    except OperationalError:
+        logger.info("failed to record test %s", str(test_result))
