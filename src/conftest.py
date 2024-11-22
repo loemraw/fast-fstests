@@ -250,9 +250,10 @@ def mkosi_fstests_dir(request):
 
 @pytest.fixture(scope="session")
 def mkosi_setup_timeout(request):
-    return int(request.config.getoption(
-        "--mkosi-setup-timeout"
-    ) or request.config.getini("mkosi_setup_timeout"))
+    return int(
+        request.config.getoption("--mkosi-setup-timeout")
+        or request.config.getini("mkosi_setup_timeout")
+    )
 
 
 @pytest.fixture(scope="session")
@@ -810,8 +811,6 @@ def invocation_id(
 def record_test(
     db_sessionmaker, request: pytest.FixtureRequest, invocation_id
 ):
-    if db_sessionmaker is None:
-        return
 
     status = None
     return_code = None
@@ -833,8 +832,11 @@ def record_test(
     yield record
     end = time.time()
 
+    # test was never recorded!
     if status is None:
-        # test was never recorded!
+        return
+
+    if db_sessionmaker is None:
         return
 
     test_result = TestResult(
