@@ -528,7 +528,6 @@ def setup_mkosi_machines(
 
 def wait_for_mkosi_machines(
     machines: Sequence[MkosiMachine],
-    procs: Sequence[subprocess.Popen],
     machine_pool: MachinePool,
     mkosi_config_dir,
     mkosi_setup_timeout,
@@ -542,14 +541,9 @@ def wait_for_mkosi_machines(
             return
 
         logger.debug("active machines %d", active_machines)
-        for machine, mkosi_proc in zip(machines, procs):
+        for machine in machines:
             if machine in machine_pool.available_machines:
                 continue
-
-            if mkosi_proc.poll() is not None:
-                raise ValueError(
-                    "failed to launch mkosi %s", machine.machine_id
-                )
 
             logger.debug("poking machine %s", machine.machine_id)
             proc = subprocess.run(
@@ -630,7 +624,6 @@ def machine_pool(
 
         wait_for_mkosi_machines(
             mkosi_machines,
-            procs,
             machine_pool,
             mkosi_config_dir,
             mkosi_setup_timeout,
