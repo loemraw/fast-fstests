@@ -17,4 +17,7 @@ excludes=           btrfs/187
 
 results_db_path=    results/results.db
 
-addopts=            -rsf --log-level WARNING --log-file-level DEBUG --log-disable filelock
+addopts=            -r sf --no-fold-skipped
+                    --log-disable filelock
+                    --log-level WARNING
+                    --log-file-level DEBUG

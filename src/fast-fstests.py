@@ -14,11 +14,11 @@ def summarize_stdout(test, stdout):
     return f"{match.group(1).strip()}" if match else stdout
 
 
-def summarize_stdout_skip(test, stdout):
+def summarize_stdout_skip(stdout):
     skip_token = "[not run]"
     reason_pattern = re.compile(rf"{re.escape(skip_token)}(.*)")
     match = reason_pattern.search(stdout)
-    return f"{test}: {match.group(1).strip() if match else stdout}"
+    return match.group(1).strip() if match else stdout
 
 
 def test(test, run_test_, record_test):
@@ -29,7 +29,7 @@ def test(test, run_test_, record_test):
 
     skip_token = "[not run]"
     if skip_token in stdout:
-        summary = summarize_stdout_skip(test, stdout)
+        summary = summarize_stdout_skip(stdout)
         record_test("skip", status, summary, stdout, stderr)
         pytest.skip(reason=summary)
 
