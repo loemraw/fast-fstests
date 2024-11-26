@@ -4,12 +4,14 @@ import os
 import pickle
 import random
 import shlex
+import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import List, Sequence, Union
+from typing import Union
 
 import pytest
 from filelock import FileLock
@@ -191,15 +193,8 @@ def __num_machines(config):
     num_mkosis = __num_mkosi(config)
     targetpaths = __targetpaths(config)
 
-    if num_mkosis + len(targetpaths) == 0:
+    if (num_machines := num_mkosis + len(targetpaths)) == 0:
         raise ValueError("no vms specified")
-
-    num_machines = 0
-
-    if num_mkosis is not None:
-        num_machines += num_mkosis
-    if targetpaths is not None:
-        num_machines += len(targetpaths)
 
     return num_machines
 
@@ -226,41 +221,60 @@ def targetpaths(request):
     return __targetpaths(request.config)
 
 
+def __mkosi_config_dir(config):
+    return config.getoption("--mkosi-config-dir") or config.getini(
+        "mkosi_config_dir"
+    )
+
+
 @pytest.fixture(scope="session")
 def mkosi_config_dir(request):
-    return request.config.getoption(
-        "--mkosi-config-dir"
-    ) or request.config.getini("mkosi_config_dir")
+    return __mkosi_config_dir(request.config)
+
+
+def __mkosi_options(config):
+    return " ".join(
+        config.getoption("--mkosi-option") + config.getini("mkosi_options")
+    )
 
 
 @pytest.fixture(scope="session")
 def mkosi_options(request):
-    return " ".join(
-        request.config.getoption("--mkosi-option")
-        + request.config.getini("mkosi_options")
+    return __mkosi_options(request.config)
+
+
+def __mkosi_fstests_dir(config):
+    return config.getoption("--mkosi-fstests-dir") or config.getini(
+        "mkosi_fstests_dir"
     )
 
 
 @pytest.fixture(scope="session")
 def mkosi_fstests_dir(request):
-    return request.config.getoption(
-        "--mkosi-fstests-dir"
-    ) or request.config.getini("mkosi_fstests_dir")
+    return __mkosi_fstests_dir(request.config)
+
+
+def __mkosi_setup_timeout(config):
+    return int(
+        config.getoption("--mkosi-setup-timeout")
+        or config.getini("mkosi_setup_timeout")
+    )
 
 
 @pytest.fixture(scope="session")
 def mkosi_setup_timeout(request):
-    return int(
-        request.config.getoption("--mkosi-setup-timeout")
-        or request.config.getini("mkosi_setup_timeout")
+    return __mkosi_setup_timeout(request.config)
+
+
+def __results_db_path(config):
+    return config.getoption("--results-db-path") or config.getini(
+        "results_db_path"
     )
 
 
 @pytest.fixture(scope="session")
 def results_db_path(request):
-    return request.config.getoption(
-        "--results-db-path"
-    ) or request.config.getini("results_db_path")
+    return __results_db_path(request.config)
 
 
 """
@@ -359,12 +373,22 @@ def __is_main_process():
 def pytest_configure(config):
     if __is_main_process():
         os.environ["RANDOM_SEED"] = str(random.random())
+        os.environ["TMPDIR"] = tempfile.mkdtemp()
 
     worker_id = os.environ.get("PYTEST_XDIST_WORKER")
     if worker_id is not None:
         logging.basicConfig(
             filename=f"logs/tests_{worker_id}.log",
+            filemode="w",
             level=config.option.log_file_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+    else:
+        logging.basicConfig(
+            filename=f"logs/conftest.log",
+            filemode="w",
+            level=config.option.log_file_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
 
 
@@ -379,41 +403,9 @@ def pytest_cmdline_main(config):
 
 @pytest.fixture(scope="session")
 def root_tmp_dir(tmp_path_factory):
-    # if xdist is "disabled" use a temp dir
-    if "PYTEST_XDIST_WORKER" not in os.environ:
+    if __is_main_process():
         return tmp_path_factory.mktemp("fast-fstests")
     return tmp_path_factory.getbasetemp().parent
-
-
-@pytest.fixture(scope="session")
-def lockless_load(root_tmp_dir):
-    def __lockless_load(file_name):
-        file_path = root_tmp_dir / file_name
-        with open(file_path, "rb") as f:
-            return pickle.load(f)
-
-    return __lockless_load
-
-
-@pytest.fixture(scope="session")
-def lockless_store(root_tmp_dir):
-    def __lockless_store(file_name, obj):
-        file_path = root_tmp_dir / file_name
-        with open(file_path, "wb") as f:
-            return pickle.dump(obj, f)
-
-    return __lockless_store
-
-
-@pytest.fixture(scope="session")
-def lock(root_tmp_dir):
-    @contextmanager
-    def __lock(file_name):
-        file_path = root_tmp_dir / file_name
-        with FileLock(str(file_path) + ".lock"):
-            yield
-
-    return __lock
 
 
 @pytest.fixture(scope="session")
@@ -443,6 +435,7 @@ MACHINE
 @dataclass
 class MkosiMachine:
     machine_id: str
+    pid: int
 
 
 @dataclass
@@ -452,13 +445,6 @@ class TargetPathMachine:
 
 
 Machine = Union[MkosiMachine, TargetPathMachine]
-
-
-@dataclass
-class MachinePool:
-    available_machines: List[Machine]
-    finished_sessions: int
-    pkl_name: str
 
 
 def setup_mkosi_machine(machine_id, mkosi_config_dir, mkosi_options):
@@ -477,17 +463,16 @@ def setup_mkosi_machine(machine_id, mkosi_config_dir, mkosi_options):
         stderr=subprocess.DEVNULL,
     )
 
-    return proc
+    return MkosiMachine(machine_id, proc.pid)
 
 
-def cleanup_mkosi_machine(
-    machine_id: str, proc: subprocess.Popen, mkosi_config_dir
-):
+def cleanup_mkosi_machine(machine: MkosiMachine, mkosi_config_dir):
+    logger.debug("sending poweroff %s", machine.machine_id)
     poweroff_status = subprocess.run(
         [
             "mkosi",
             "--machine",
-            machine_id,
+            machine.machine_id,
             "ssh",
             "poweroff",
         ],
@@ -497,176 +482,84 @@ def cleanup_mkosi_machine(
         stderr=subprocess.PIPE,
     ).returncode
 
-    if poweroff_status == 0:
+    logger.debug("poweroff status %d", poweroff_status)
+    if poweroff_status == 0 or poweroff_status == 1:
         return
 
-    proc.terminate()
     try:
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        pass
-
-
-def setup_mkosi_machines(
-    machines: Sequence[MkosiMachine],
-    mkosi_config_dir,
-    mkosi_options,
-):
-    if len(machines) > 0 and mkosi_config_dir is None:
-        raise ValueError("must configure mkosi-config-dir when using mkosi")
-
-    procs = []
-    for machine in machines:
-        procs.append(
-            setup_mkosi_machine(
-                machine.machine_id, mkosi_config_dir, mkosi_options
-            )
+        logger.debug("sigterm process %s", machine.machine_id)
+        os.kill(machine.pid, signal.SIGTERM)
+        for _ in range(5):
+            try:
+                pid, _ = os.waitpid(machine.pid, os.WNOHANG)
+                if pid != 0:
+                    return
+                time.sleep(1)
+            except ChildProcessError:
+                logger.error(
+                    "something went wrong waiting for machine cleanup %s",
+                    machine.machine_id,
+                )
+    except ProcessLookupError:
+        logger.debug("process already terminated %s", machine.machine_id)
+        return
+    except OSError:
+        logger.error(
+            "something went wrong killing machine %s", machine.machine_id
         )
 
-    return procs
+    try:
+        logger.debug("sigkill process %s", machine.machine_id)
+        os.kill(machine.pid, signal.SIGKILL)
+    except OSError:
+        logger.error(
+            "something went wrong killing machine %s", machine.machine_id
+        )
 
 
-def wait_for_mkosi_machines(
-    machines: Sequence[MkosiMachine],
-    machine_pool: MachinePool,
+def wait_for_mkosi_machine(
+    machine: MkosiMachine,
     mkosi_config_dir,
     mkosi_setup_timeout,
 ):
-    logger.debug("waiting for mkosi machines...")
-    active_machines = 0
+    logger.debug("waiting for mkosi machine %s...", machine.machine_id)
     for _ in range(mkosi_setup_timeout):
-        time.sleep(1)
+        logger.debug("poking machine %s", machine.machine_id)
+        proc = subprocess.run(
+            [
+                "mkosi",
+                "--machine",
+                machine.machine_id,
+                "ssh",
+                "echo POKE",
+            ],
+            cwd=mkosi_config_dir,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        logger.debug(
+            "machine %s status %d %s %s",
+            machine.machine_id,
+            proc.returncode,
+            proc.stdout.decode(),
+            proc.stderr.decode(),
+        )
 
-        if active_machines == len(machines):
+        if proc.returncode == 0:
             return
 
-        logger.debug("active machines %d", active_machines)
-        for machine in machines:
-            if machine in machine_pool.available_machines:
-                continue
-
-            logger.debug("poking machine %s", machine.machine_id)
-            proc = subprocess.run(
-                [
-                    "mkosi",
-                    "--machine",
-                    machine.machine_id,
-                    "ssh",
-                    "echo POKE",
-                ],
-                cwd=mkosi_config_dir,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            logger.debug(
-                "machine %s status %s %s",
-                machine.machine_id,
-                proc.stdout.decode(),
-                proc.stderr.decode(),
-            )
-
-            if proc.returncode == 0:
-                logger.debug("machine %s is ready", machine.machine_id)
-                machine_pool.available_machines.append(machine)
-                active_machines += 1
+        time.sleep(1)
 
     raise ValueError("mkosi setup took too long")
 
 
-def cleanup_mkosi_machines(
-    machines: Sequence[MkosiMachine],
-    procs: Sequence[subprocess.Popen],
-    mkosi_config_dir,
-):
-    logger.debug("cleaning up machines...")
-    for machine, proc in zip(machines, procs):
-        logger.debug(
-            "cleaning up mkosi machine %s w/ output %s %s",
-            machine.machine_id,
-            proc.stdout,
-            proc.stderr,
-        )
-        cleanup_mkosi_machine(machine.machine_id, proc, mkosi_config_dir)
-
-
-@pytest.fixture(scope="session")
-def machine_pool(
-    num_mkosi,
-    targetpaths,
-    mkosi_config_dir,
-    mkosi_options,
-    mkosi_setup_timeout,
-    perform_once,
-    lock,
-    lockless_load,
-    lockless_store,
-):
-    procs = None
-    mkosi_machines = None
-    pkl_name = "machine_pool.pkl"
-
-    def __setup_machine_pool():
-        nonlocal procs, mkosi_machines
-
-        mkosi_machines = [MkosiMachine(str(i)) for i in range(num_mkosi)]
-        procs = setup_mkosi_machines(
-            mkosi_machines,
-            mkosi_config_dir,
-            mkosi_options,
-        )
-
-        machine_pool = MachinePool(
-            [TargetPathMachine(*t.split(":")) for t in targetpaths],
-            0,
-            pkl_name,
-        )
-
-        wait_for_mkosi_machines(
-            mkosi_machines,
-            machine_pool,
-            mkosi_config_dir,
-            mkosi_setup_timeout,
-        )
-        return machine_pool
-
-    machine_pool = perform_once(pkl_name, __setup_machine_pool)
-    yield machine_pool
-
-    with lock(pkl_name):
-        machine_pool = lockless_load(pkl_name)
-        machine_pool.finished_sessions += 1
-        lockless_store(pkl_name, machine_pool)
-
-    if procs is None or mkosi_machines is None:
-        return
-
-    while True:
-        with lock(pkl_name):
-            machine_pool = lockless_load(pkl_name)
-            if machine_pool.finished_sessions == num_mkosi + len(targetpaths):
-                break
-
-    cleanup_mkosi_machines(mkosi_machines, procs, mkosi_config_dir)
-
-
 @pytest.fixture
 def run_test_(
-    machine_pool: MachinePool,
-    lock,
-    lockless_load,
-    lockless_store,
     mkosi_config_dir,
     mkosi_fstests_dir,
 ):
-    machine = None
-    while machine is None:
-        with lock(machine_pool.pkl_name):
-            machine_pool = lockless_load(machine_pool.pkl_name)
-            assert isinstance(machine_pool, MachinePool)
-            if machine_pool.available_machines:
-                machine = machine_pool.available_machines.pop()
-            lockless_store(machine_pool.pkl_name, machine_pool)
+    machine = __get_machine()
 
     def __run_test_(test):
         if isinstance(machine, MkosiMachine):
@@ -704,12 +597,80 @@ def run_test_(
 
             return proc.returncode, proc.stdout, proc.stderr
 
-    yield __run_test_
+    return __run_test_
 
-    with lock(machine_pool.pkl_name):
-        machine_pool = lockless_load(machine_pool.pkl_name)
-        machine_pool.available_machines.append(machine)
-        lockless_store(machine_pool.pkl_name, machine_pool)
+
+@pytest.hookimpl
+def pytest_xdist_setupnodes(config):
+    num_mkosi = __num_mkosi(config)
+    targetpaths = __targetpaths(config)
+    id = 0
+
+    for _ in range(num_mkosi):
+        worker_id = f"gw{id}"
+        id += 1
+
+        machine = setup_mkosi_machine(
+            worker_id, __mkosi_config_dir(config), __mkosi_options(config)
+        )
+
+        with open(os.path.join(__tmpdir(), worker_id), "wb") as f:
+            pickle.dump(machine, f)
+
+    for targetpath in targetpaths:
+        worker_id = f"gw{id}"
+        id += 1
+
+        machine = TargetPathMachine(*targetpath.split(":"))
+
+        with open(os.path.join(__tmpdir(), worker_id), "wb") as f:
+            pickle.dump(machine, f)
+
+
+@pytest.hookimpl
+def pytest_configure_node(node):
+    worker_id = node.gateway.id
+    if worker_id is None:
+        return
+
+    with open(os.path.join(__tmpdir(), worker_id), "rb") as f:
+        machine: Machine = pickle.load(f)
+
+    if isinstance(machine, MkosiMachine):
+        wait_for_mkosi_machine(
+            machine,
+            __mkosi_config_dir(node.config),
+            __mkosi_setup_timeout(node.config),
+        )
+
+    elif isinstance(machine, TargetPathMachine):
+        pass
+
+
+@pytest.hookimpl
+def pytest_sessionfinish(session):
+    if __is_main_process():
+        shutil.rmtree(__tmpdir())
+    else:
+        machine = __get_machine()
+        if isinstance(machine, MkosiMachine):
+            cleanup_mkosi_machine(machine, __mkosi_config_dir(session.config))
+
+
+def __tmpdir():
+    if (tmpdir := os.environ.get("TMPDIR")) is None:
+        raise ValueError("no tmp dir")
+    return tmpdir
+
+
+def __get_machine():
+    if (worker_id := os.environ.get("PYTEST_XDIST_WORKER")) is None:
+        raise ValueError("no worker_id found")
+
+    with open(os.path.join(__tmpdir(), worker_id), "rb") as f:
+        machine = pickle.load(f)
+        logger.debug(machine)
+        return machine
 
 
 """
