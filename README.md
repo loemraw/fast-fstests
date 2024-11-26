@@ -41,14 +41,13 @@ unless it's a list argument, in which case command line flags will append to pyt
 | targetpaths | --targetpath | Specify targetpaths to run fstests on.<br>HOSTNAME:PATH-TO-FSTESTS eg. vm1:/home/fstests |
 | mkosi | --mkosi | Specify the number of mkosi hosts to create. |
 | mkosi_config_dir | --mkosi-config-dir | Path to mkosi configuration directory. |
-| mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
-| mkosi_options | --mkosi-option | Options to pass to mkosi when launching qemu. |
+| mkosi_options | --mkosi-options | Options to pass to mkosi when launching qemu. |
 | mkosi_fstests_dir | --mkosi-fstests-dir | Path to fstests on mkosi. |
 | mkosi_setup_timeout | --mkosi-setup-timeout | How long to wait in seconds for mkosi setup before aborting. (default 60s) |
 | host_fstests_dir | --host-fstests-dir | Path to fstests on host. |
-| tests | --test | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
+| tests | --tests | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
 | group | --group | Name of group to run e.g. btrfs/quick or auto. (can't be used with tests) |
-| excludes | --exclude | List of tests to exclude. |
+| excludes | --excludes | List of tests to exclude. |
 | random | --random | Whether to randomize the order that tests are run. |
 | results_db_path | --results-db-path | Path to results db. |
 

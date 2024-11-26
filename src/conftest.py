@@ -72,8 +72,8 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
-        "--mkosi-option",
-        action="append",
+        "--mkosi-options",
+        nargs="+",
         default=[],
         help="Options to pass to mkosi",
     )
@@ -124,10 +124,10 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
-        "--test",
-        action="append",
+        "--tests",
+        nargs="+",
         default=[],
-        help="Individual test to run (can't be used with group). Can be specified multiple times.",
+        help="Individual tests to run (can't be used with group).",
     )
     parser.addini(
         "tests",
@@ -137,16 +137,16 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
-        "--exclude",
-        action="append",
+        "--excludes",
+        nargs="+",
         default=[],
-        help="Individual test to exclude. Can be specified multiple times.",
+        help="Individual tests to exclude",
     )
     parser.addini(
         "excludes",
         type="linelist",
         default=[],
-        help="List of individual tests to exclude",
+        help="Individual tests to exclude",
     )
 
     parser.addoption(
@@ -234,7 +234,7 @@ def mkosi_config_dir(request):
 
 def __mkosi_options(config):
     return " ".join(
-        config.getoption("--mkosi-option") + config.getini("mkosi_options")
+        config.getoption("--mkosi-options") + config.getini("mkosi_options")
     )
 
 
@@ -319,7 +319,7 @@ def pytest_generate_tests(metafunc):
     group = metafunc.config.getoption("--group") or metafunc.config.getini(
         "group"
     )
-    tests = metafunc.config.getoption("--test") + metafunc.config.getini(
+    tests = metafunc.config.getoption("--tests") + metafunc.config.getini(
         "tests"
     )
 
@@ -342,9 +342,12 @@ def pytest_generate_tests(metafunc):
     assert isinstance(tests, list)
 
     excluded_tests = metafunc.config.getoption(
-        "--exclude"
+        "--excludes"
     ) + metafunc.config.getini("excludes")
     tests = [test for test in tests if test not in excluded_tests]
+
+    if len(tests) == 0:
+        raise ValueError("no tests specified")
 
     should_randomize = metafunc.config.getoption(
         "--random"
@@ -669,7 +672,6 @@ def __get_machine():
 
     with open(os.path.join(__tmpdir(), worker_id), "rb") as f:
         machine = pickle.load(f)
-        logger.debug(machine)
         return machine
 
 
