@@ -527,6 +527,15 @@ def wait_for_mkosi_machine(
 ):
     logger.debug("waiting for mkosi machine %s...", machine.machine_id)
     for _ in range(mkosi_setup_timeout):
+        try:
+            # check if the pid exists
+            os.kill(machine.pid, 0)
+        except OSError:
+            logger.warning("machine %s is not running!", machine.machine_id)
+            raise ConnectionError(
+                "machine is not running, make sure that your mkosi is built with -f before running fast-fstests"
+            )
+
         logger.debug("poking machine %s", machine.machine_id)
         proc = subprocess.run(
             [
