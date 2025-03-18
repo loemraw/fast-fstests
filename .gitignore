@@ -2,3 +2,5 @@ results/*
 logs/*
 __pycache__
 pytest.ini
+EXCLUDE
+.python-version
