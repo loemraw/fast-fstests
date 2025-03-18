@@ -48,6 +48,7 @@ unless it's a list argument, in which case command line flags will append to pyt
 | tests | --tests | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
 | group | --group | Name of group to run e.g. btrfs/quick or auto. (can't be used with tests) |
 | excludes | --excludes | List of tests to exclude. |
+| exclude_file | --exclude-file | Path to an exclude file with a test per line to exclude from test run. Cannot be used with --excludes. |
 | random | --random | Whether to randomize the order that tests are run. |
 | results_db_path | --results-db-path | Path to results db. |
 
