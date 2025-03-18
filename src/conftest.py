@@ -150,6 +150,19 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
+        "--exclude-file",
+        action="store",
+        default=None,
+        help="Path to an exclude file with a test per line to exclude from test run.",
+    )
+    parser.addini(
+        "exclude_file",
+        type="string",
+        default=None,
+        help="Path to an exclude file with a test per line to exclude from test run.",
+    )
+
+    parser.addoption(
         "--group",
         action="store",
         default=None,
@@ -341,9 +354,22 @@ def pytest_generate_tests(metafunc):
 
     assert isinstance(tests, list)
 
-    excluded_tests = metafunc.config.getoption(
-        "--excludes"
-    ) + metafunc.config.getini("excludes")
+    exclude_file = metafunc.config.getoption(
+        "--exclude-file"
+    ) or metafunc.config.getini("exclude_file")
+
+    excluded_tests = metafunc.config.getoption("--excludes") + metafunc.config.getini(
+        "excludes"
+    )
+
+    if exclude_file and excluded_tests:
+        raise ValueError("cannot specify both excludes and exclude file")
+
+    if exclude_file:
+        with open(exclude_file, "r") as f:
+            for line in f:
+                excluded_tests.append(line.rstrip())
+
     tests = [test for test in tests if test not in excluded_tests]
 
     if len(tests) == 0:
