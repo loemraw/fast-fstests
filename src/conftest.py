@@ -3,6 +3,7 @@ import logging
 import os
 import pickle
 import random
+import re
 import shlex
 import shutil
 import signal
@@ -831,3 +832,28 @@ def record_test(db_sessionmaker, request: pytest.FixtureRequest, invocation_id):
             session.commit()
     except OperationalError:
         logger.exception("failed to record test")
+
+
+"""
+CUSTOM SUMMARIES
+"""
+
+
+def rerun_failures_summary(stats) -> str:
+    failed_tests = []
+    test_name_pattern = re.compile(r"::test\[(.+)\]")
+
+    for report in stats["failed"]:
+        match = test_name_pattern.search(report.nodeid)
+        if match is not None:
+            failed_tests.append(match.group(1))
+
+    return f"--tests {' '.join(failed_tests)}\n"
+
+
+def pytest_terminal_summary(
+    terminalreporter: TerminalReporter, exitstatus, config: pytest.Config
+):
+    terminalreporter.ensure_newline()
+    terminalreporter.write_sep("*", "rerun failures", purple=True)
+    terminalreporter.write(rerun_failures_summary(terminalreporter.stats))
