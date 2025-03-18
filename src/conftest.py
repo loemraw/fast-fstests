@@ -235,9 +235,7 @@ def targetpaths(request):
 
 
 def __mkosi_config_dir(config):
-    return config.getoption("--mkosi-config-dir") or config.getini(
-        "mkosi_config_dir"
-    )
+    return config.getoption("--mkosi-config-dir") or config.getini("mkosi_config_dir")
 
 
 @pytest.fixture(scope="session")
@@ -257,9 +255,7 @@ def mkosi_options(request):
 
 
 def __mkosi_fstests_dir(config):
-    return config.getoption("--mkosi-fstests-dir") or config.getini(
-        "mkosi_fstests_dir"
-    )
+    return config.getoption("--mkosi-fstests-dir") or config.getini("mkosi_fstests_dir")
 
 
 @pytest.fixture(scope="session")
@@ -280,9 +276,7 @@ def mkosi_setup_timeout(request):
 
 
 def __results_db_path(config):
-    return config.getoption("--results-db-path") or config.getini(
-        "results_db_path"
-    )
+    return config.getoption("--results-db-path") or config.getini("results_db_path")
 
 
 @pytest.fixture(scope="session")
@@ -329,12 +323,8 @@ def get_tests_for_(group, fstests_dir_host):
 
 @pytest.hookimpl
 def pytest_generate_tests(metafunc):
-    group = metafunc.config.getoption("--group") or metafunc.config.getini(
-        "group"
-    )
-    tests = metafunc.config.getoption("--tests") + metafunc.config.getini(
-        "tests"
-    )
+    group = metafunc.config.getoption("--group") or metafunc.config.getini("group")
+    tests = metafunc.config.getoption("--tests") + metafunc.config.getini("tests")
 
     if group is None and not tests:
         raise ValueError("no tests specified")
@@ -375,9 +365,9 @@ def pytest_generate_tests(metafunc):
     if len(tests) == 0:
         raise ValueError("no tests specified")
 
-    should_randomize = metafunc.config.getoption(
-        "--random"
-    ) or metafunc.config.getini("random")
+    should_randomize = metafunc.config.getoption("--random") or metafunc.config.getini(
+        "random"
+    )
 
     if should_randomize:
         random.seed(float(os.environ["RANDOM_SEED"]))
@@ -533,17 +523,13 @@ def cleanup_mkosi_machine(machine: MkosiMachine, mkosi_config_dir):
         logger.debug("process already terminated %s", machine.machine_id)
         return
     except OSError:
-        logger.error(
-            "something went wrong killing machine %s", machine.machine_id
-        )
+        logger.error("something went wrong killing machine %s", machine.machine_id)
 
     try:
         logger.debug("sigkill process %s", machine.machine_id)
         os.kill(machine.pid, signal.SIGKILL)
     except OSError:
-        logger.error(
-            "something went wrong killing machine %s", machine.machine_id
-        )
+        logger.error("something went wrong killing machine %s", machine.machine_id)
 
 
 def wait_for_mkosi_machine(
@@ -799,10 +785,7 @@ def invocation_id(
 
 
 @pytest.fixture(scope="function")
-def record_test(
-    db_sessionmaker, request: pytest.FixtureRequest, invocation_id
-):
-
+def record_test(db_sessionmaker, request: pytest.FixtureRequest, invocation_id):
     status = None
     return_code = None
     summary = None
