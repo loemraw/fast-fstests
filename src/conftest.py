@@ -852,7 +852,7 @@ def rerun_failures_summary(stats) -> str:
 
 
 def pytest_terminal_summary(
-    terminalreporter: TerminalReporter, exitstatus, config: pytest.Config
+    terminalreporter, exitstatus, config: pytest.Config
 ):
     terminalreporter.ensure_newline()
     terminalreporter.write_sep("*", "rerun failures", purple=True)
