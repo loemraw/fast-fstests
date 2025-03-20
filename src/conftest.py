@@ -304,8 +304,12 @@ def get_tests_for_(group, fstests_dir_host):
         stdout = proc.stdout.decode()
 
         for line in stdout.splitlines():
-            if group in line:
-                test = f"{dir}/{line.split()[0]}"
+            if group in line or group == "all":
+                try:
+                    test = f"{dir}/{line.split()[0]}"
+                except IndexError:
+                    continue
+
                 if "#" in test:
                     continue
                 yield test
