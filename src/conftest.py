@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from typing import Union
+from typing import List, Union
 
 import pytest
 from filelock import FileLock
@@ -839,21 +839,23 @@ CUSTOM SUMMARIES
 """
 
 
-def rerun_failures_summary(stats) -> str:
+def get_failures(stats) -> List[str]:
     failed_tests = []
     test_name_pattern = re.compile(r"::test\[(.+)\]")
 
-    for report in stats["failed"]:
+    for report in stats.get("failed", []):
         match = test_name_pattern.search(report.nodeid)
         if match is not None:
             failed_tests.append(match.group(1))
 
-    return f"--tests {' '.join(failed_tests)}\n"
+    return failed_tests
 
 
 def pytest_terminal_summary(
     terminalreporter, exitstatus, config: pytest.Config
 ):
-    terminalreporter.ensure_newline()
-    terminalreporter.write_sep("*", "rerun failures", purple=True)
-    terminalreporter.write(rerun_failures_summary(terminalreporter.stats))
+    failures = get_failures(terminalreporter.stats)
+    if failures:
+        terminalreporter.ensure_newline()
+        terminalreporter.write_sep("*", "rerun failures", purple=True)
+        terminalreporter.write(f"--tests {' '.join(failures)}\n")
