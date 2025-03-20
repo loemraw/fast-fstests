@@ -363,6 +363,8 @@ def pytest_generate_tests(metafunc):
     if exclude_file:
         with open(exclude_file, "r") as f:
             for line in f:
+                if line == "" or line[0] == "#":
+                    continue
                 excluded_tests.append(line.rstrip())
 
     tests = [test for test in tests if test not in excluded_tests]
