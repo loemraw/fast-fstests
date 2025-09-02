@@ -15,8 +15,6 @@ group=              btrfs/auto
 excludes=           btrfs/187
                     generic/562
 
-results_db_path=    results/results.db
-
 addopts=            -r sf --no-fold-skipped
                     --log-disable filelock
                     --log-level WARNING

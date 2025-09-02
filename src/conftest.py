@@ -20,8 +20,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
-from src.db import Invocation, TestResult
-
 logger = logging.getLogger(__name__)
 
 """
@@ -203,16 +201,16 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
-        "--results-db-path",
+        "--results-path",
         action="store",
         default=None,
-        help="Path to results sqlite db",
+        help="Path to results directory",
     )
     parser.addini(
-        "results_db_path",
+        "results_path",
         type="string",
         default=None,
-        help="Path to results sqlite db",
+        help="Path to results directory",
     )
 
 
@@ -292,13 +290,8 @@ def mkosi_setup_timeout(request):
 def __no_cleanup_on_failure(config):
     return config.getoption("--no-cleanup-on-failure") or config.getini("no_cleanup_on_failure")
 
-def __results_db_path(config):
-    return config.getoption("--results-db-path") or config.getini("results_db_path")
-
-
-@pytest.fixture(scope="session")
-def results_db_path(request):
-    return __results_db_path(request.config)
+def __results_path(config):
+    return config.getoption("--results-path") or config.getini("results_path")
 
 
 """
@@ -634,7 +627,8 @@ def run_test_(
                 stderr=subprocess.PIPE,
             )
 
-            logger.debug("ran test %s got return code %d", test, proc.returncode)
+            record_test(__results_path(request.config), test, proc.returncode, proc.stdout, proc.stderr)
+    
             if proc.returncode != 0 and __no_cleanup_on_failure(request.config):
                 logger.debug("not cleaning up")
                 machine.cleanup = False
@@ -655,6 +649,7 @@ def run_test_(
                 stderr=subprocess.PIPE,
             )
 
+            record_test(__results_path(request.config), test, proc.returncode, proc.stdout, proc.stderr)
             return proc.returncode, proc.stdout, proc.stderr
 
     return __run_test_
@@ -743,138 +738,23 @@ def __save_machine(machine):
 RESULTS DB
 """
 
-
-@pytest.fixture(scope="session")
-def db_sessionmaker(results_db_path):
-    if results_db_path is None:
-        return
-    engine = create_engine(f"sqlite:///{results_db_path}")
-    return sessionmaker(bind=engine)
-
-
-@pytest.fixture(scope="session")
-def get_pytest_options(pytestconfig, perform_once):
-    def __pytest_options():
-        return json.dumps(pytestconfig.inicfg)
-
-    return perform_once("pytest_options.pkl", __pytest_options)
-
-
-@pytest.fixture(scope="session")
-def get_pytest_invocation(pytestconfig, perform_once):
-    def __pytest_invocation():
-        return json.dumps(pytestconfig.invocation_params.args)
-
-    return perform_once("pytest_invocation.pkl", __pytest_invocation)
-
-
-@pytest.fixture(scope="session")
-def mkosi_version(perform_once):
-    def __mkosi_version():
-        return subprocess.run(
-            ["mkosi", "--version"], capture_output=True
-        ).stdout.decode()
-
-    return perform_once("mkosi_version.pkl", __mkosi_version)
-
-
-@pytest.fixture(scope="session")
-def mkosi_config(mkosi_config_dir, mkosi_options, perform_once):
-    def __mkosi_config():
-        env = os.environ.copy()
-        env["PAGER"] = "cat"
-        return subprocess.run(
-            ["mkosi", *(shlex.split(mkosi_options)), "cat-config"],
-            cwd=mkosi_config_dir,
-            capture_output=True,
-            env=env,
-        ).stdout.decode()
-
-    return perform_once("mkosi_config.pkl", __mkosi_config)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def invocation_id(
-    db_sessionmaker,
-    get_pytest_options,
-    get_pytest_invocation,
-    mkosi_version,
-    mkosi_config,
-    perform_once,
-):
-    if db_sessionmaker is None:
+def record_test(results_dir, test, return_code, stdout, stderr):
+    if not results_dir:
+        logger.debug("no results dir", test)
         return
 
-    def __record_invocation():
-        invocation = Invocation(
-            timestamp=int(time.time()),
-            python_version=sys.version,
-            pytest_version=pytest.__version__,
-            pytest_options=get_pytest_options,
-            pytest_invocation=get_pytest_invocation,
-            mkosi_version=mkosi_version,
-            mkosi_config=mkosi_config,
-        )
+    logger.debug("recording test %s", test)
+    latest_test_path = os.path.join(results_dir, test, str(int(time.time())))
+    os.makedirs(latest_test_path)
+    
+    with open(os.path.join(latest_test_path, "retcode"), "w") as f:
+        f.write(str(return_code))
 
-        try:
-            with db_sessionmaker() as session:
-                session.add(invocation)
-                session.commit()
-                return invocation.id
-        except OperationalError:
-            logger.exception("failed to record invocation")
+    with open(os.path.join(latest_test_path, "stdout"), "w") as f:
+        f.write(stdout.decode())
 
-    return perform_once("invocation_id.pkl", __record_invocation)
-
-
-@pytest.fixture(scope="function")
-def record_test(db_sessionmaker, request: pytest.FixtureRequest, invocation_id):
-    status = None
-    return_code = None
-    summary = None
-    stdout = None
-    stderr = None
-
-    def record(_status, _return_code, _summary, _stdout, _stderr):
-        nonlocal status, return_code, summary, stdout, stderr
-        status, return_code, summary, stdout, stderr = (
-            _status,
-            _return_code,
-            _summary,
-            _stdout,
-            _stderr,
-        )
-
-    start = time.time()
-    yield record
-    end = time.time()
-
-    # test was never recorded!
-    if status is None:
-        return
-
-    if db_sessionmaker is None:
-        return
-
-    test_result = TestResult(
-        invocation_id=invocation_id,
-        timestamp=int(time.time()),
-        name=request.node.funcargs["test"],
-        time=end - start,
-        status=status,
-        return_code=return_code,
-        summary=summary,
-        stdout=stdout,
-        stderr=stderr,
-    )
-
-    try:
-        with db_sessionmaker() as session:
-            session.add(test_result)
-            session.commit()
-    except OperationalError:
-        logger.exception("failed to record test")
-
+    with open(os.path.join(latest_test_path, "stderr"), "w") as f:
+        f.write(stderr.decode())
 
 """
 CUSTOM SUMMARIES

@@ -21,7 +21,7 @@ def summarize_stdout_skip(stdout):
     return match.group(1).strip() if match else stdout
 
 
-def test(test, run_test_, record_test):
+def test(test, run_test_):
     status, stdout, stderr = run_test_(test)
 
     stdout = stdout.decode()
@@ -30,12 +30,8 @@ def test(test, run_test_, record_test):
     skip_token = "[not run]"
     if skip_token in stdout:
         summary = summarize_stdout_skip(stdout)
-        record_test("skip", status, summary, stdout, stderr)
         pytest.skip(reason=summary)
 
     summary = summarize_stdout(test, stdout)
     if status != 0:
-        record_test("fail", status, summary, stdout, stderr)
         pytest.fail(reason=summary, pytrace=False)
-
-    record_test("pass", status, summary, stdout, stderr)

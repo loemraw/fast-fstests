@@ -28,7 +28,6 @@ There is between a 3-7x speed improvement, bringing down the time to run auto fr
 ## fast-fstests optionally uses:
 * [mkosi](https://github.com/systemd/mkosi) - for managing virtual machines
 * [mkosi-kernel](https://github.com/DaanDeMeyer/mkosi-kernel) - for configuring mkosi
-* [SQLAlchemy](https://www.sqlalchemy.org/) - for keeping track of test results
 
 # fast-fstests configuration
 * fast-fstests can be configured via a pytest.ini file or via cli arguments.
@@ -51,6 +50,7 @@ unless it's a list argument, in which case command line flags will append to pyt
 | exclude_file | --exclude-file | Path to an exclude file with a test per line to exclude from test run. Cannot be used with --excludes. |
 | random | --random | Whether to randomize the order that tests are run. |
 | no_cleanup_on_failure | --no-cleanup-on-failure | Preserve machine if a there was a test failure. Requires manual cleanup before next fast-fstest run. `mkosi --machine {MACHINE} ssh poweroff` |
+| results_path | --results-path | Path to results directory. All test outputs stored here. |
 
 # Run fast-fstests
 ```
@@ -121,23 +121,5 @@ Should successfully ssh into qemu vm.
 pytest src/fast-fstests.py --mkosi 5 --group btrfs/auto
 ```
 
-# Results DB
-
-1. Install dependency
-```
-cd .../fast-fstests
-pip install sqlalchemy 
-```
-
-2. Setup results db
-```
-python3 src/setup_db.py [PATH TO CREATE RESULTS DB]
-```
-
-3. Configure fast-fstests
-In pytest.ini add\
-```
-results_db_path=[PATH TO RESULTS DB]
-```
-
-4. [TODO] CLI for interacting with test history
+# Results
+Test results can be found at `results_path/{TEST}/{LATEST_TIMESTAMP}/` and include return code, stdout and stderr.
