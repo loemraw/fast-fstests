@@ -50,7 +50,7 @@ unless it's a list argument, in which case command line flags will append to pyt
 | excludes | --excludes | List of tests to exclude. |
 | exclude_file | --exclude-file | Path to an exclude file with a test per line to exclude from test run. Cannot be used with --excludes. |
 | random | --random | Whether to randomize the order that tests are run. |
-| results_db_path | --results-db-path | Path to results db. |
+| no_cleanup_on_failure | --no-cleanup-on-failure | Preserve machine if a there was a test failure. Requires manual cleanup before next fast-fstest run. `mkosi --machine {MACHINE} ssh poweroff` |
 
 # Run fast-fstests
 ```

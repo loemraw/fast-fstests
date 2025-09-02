@@ -190,6 +190,19 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
     parser.addoption(
+        "--no-cleanup-on-failure",
+        action="store_true",
+        default=False,
+        help="Do not cleanup machine if a test fails on it.",
+    )
+    parser.addini(
+        "no_cleanup_on_failure",
+        type="bool",
+        default=False,
+        help="Do not cleanup machine if a test fails on it.",
+    )
+
+    parser.addoption(
         "--results-db-path",
         action="store",
         default=None,
@@ -275,6 +288,9 @@ def __mkosi_setup_timeout(config):
 def mkosi_setup_timeout(request):
     return __mkosi_setup_timeout(request.config)
 
+
+def __no_cleanup_on_failure(config):
+    return config.getoption("--no-cleanup-on-failure") or config.getini("no_cleanup_on_failure")
 
 def __results_db_path(config):
     return config.getoption("--results-db-path") or config.getini("results_db_path")
@@ -462,6 +478,7 @@ MACHINE
 class MkosiMachine:
     machine_id: str
     pid: int
+    cleanup: bool
 
 
 @dataclass
@@ -483,16 +500,21 @@ def setup_mkosi_machine(machine_id, mkosi_config_dir, mkosi_options):
             *(shlex.split(mkosi_options)),
             "qemu",
         ],
+        start_new_session=True,
         cwd=mkosi_config_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
-    return MkosiMachine(machine_id, proc.pid)
+    return MkosiMachine(machine_id, proc.pid, True)
 
 
 def cleanup_mkosi_machine(machine: MkosiMachine, mkosi_config_dir):
+    if not machine.cleanup:
+        logger.debug("not cleaning up machine %s", machine.machine_id)
+        return
+
     logger.debug("sending poweroff %s", machine.machine_id)
     poweroff_status = subprocess.run(
         [
@@ -587,6 +609,7 @@ def wait_for_mkosi_machine(
 
 @pytest.fixture
 def run_test_(
+    request,
     mkosi_config_dir,
     mkosi_fstests_dir,
 ):
@@ -610,6 +633,12 @@ def run_test_(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
+
+            logger.debug("ran test %s got return code %d", test, proc.returncode)
+            if proc.returncode != 0 and __no_cleanup_on_failure(request.config):
+                logger.debug("not cleaning up")
+                machine.cleanup = False
+                __save_machine(machine)
 
             return proc.returncode, proc.stdout, proc.stderr
 
@@ -701,6 +730,13 @@ def __get_machine():
     with open(os.path.join(__tmpdir(), worker_id), "rb") as f:
         machine = pickle.load(f)
         return machine
+
+def __save_machine(machine):
+    if (worker_id := os.environ.get("PYTEST_XDIST_WORKER")) is None:
+        raise ValueError("no worker_id found")
+
+    with open(os.path.join(__tmpdir(), worker_id), "wb") as f:
+        machine = pickle.dump(machine, f)
 
 
 """
