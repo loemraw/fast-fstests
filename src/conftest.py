@@ -410,6 +410,8 @@ def pytest_configure(config):
         os.environ["RANDOM_SEED"] = str(random.random())
         os.environ["TMPDIR"] = tempfile.mkdtemp()
 
+    if not os.path.isdir("logs"):
+        return
     worker_id = os.environ.get("PYTEST_XDIST_WORKER")
     if worker_id is not None:
         logging.basicConfig(
