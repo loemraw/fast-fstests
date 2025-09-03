@@ -635,6 +635,7 @@ def run_test_(
                 logger.debug("not cleaning up")
                 machine.cleanup = False
                 __save_machine(machine)
+                add_machine_to_no_cleanup(machine.machine_id)
 
             return proc.returncode, proc.stdout, proc.stderr
 
@@ -706,9 +707,7 @@ def pytest_configure_node(node):
 
 @pytest.hookimpl
 def pytest_sessionfinish(session):
-    if __is_main_process():
-        shutil.rmtree(__tmpdir())
-    else:
+    if not __is_main_process():
         machine = __get_machine()
         if isinstance(machine, MkosiMachine):
             cleanup_mkosi_machine(machine, __mkosi_config_dir(session.config))
@@ -762,6 +761,14 @@ def record_test(results_dir, test, return_code, stdout, stderr):
 CUSTOM SUMMARIES
 """
 
+def add_machine_to_no_cleanup(machine_id):
+    with open(os.path.join(__tmpdir(), "no_cleanup"), "a+") as f:
+        f.write(f"{machine_id} ")
+
+def read_no_cleanup():
+    with open(os.path.join(__tmpdir(), "no_cleanup"), "r") as f:
+        return f.read().strip()
+
 
 def get_failures(stats) -> List[str]:
     failed_tests = []
@@ -783,3 +790,13 @@ def pytest_terminal_summary(
         terminalreporter.ensure_newline()
         terminalreporter.write_sep("*", "rerun failures", purple=True)
         terminalreporter.write(f"--tests {' '.join(failures)}\n")
+
+    no_cleanup = read_no_cleanup()
+    if no_cleanup:
+        terminalreporter.ensure_newline()
+        terminalreporter.write_sep("*", "machines requiring manual cleanup", purple=True)
+        machines = read_no_cleanup()
+        terminalreporter.write(machines)
+        terminalreporter.write("\n")
+        terminalreporter.write("\n".join([f"mkosi --machine {machine} ssh poweroff" for machine in machines.split(" ")]))
+        terminalreporter.write("\n")
