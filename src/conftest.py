@@ -766,8 +766,11 @@ def add_machine_to_no_cleanup(machine_id):
         f.write(f"{machine_id} ")
 
 def read_no_cleanup():
-    with open(os.path.join(__tmpdir(), "no_cleanup"), "r") as f:
-        return f.read().strip()
+    try:
+        with open(os.path.join(__tmpdir(), "no_cleanup"), "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ""
 
 
 def get_failures(stats) -> List[str]:
