@@ -1,9 +1,5 @@
 # What is fast-fstests?
-fast-fstests is a tool that wraps fstests with pytest,
-opening up possibilities to better integrate with CI/CD pipelines.
-It leverages multiple machines allowing for parallel testing.
-This can be configured optionally with mkosi to automatically
-handle the creation and destruction of vms.
+fast-fstests is a tool that parallelizes fstests across virtual machines
 
 # How much faster?
 Runtime data in seconds collected on my machine.
@@ -21,48 +17,69 @@ There is between a 3-7x speed improvement, bringing down the time to run auto fr
 
 # Getting started with fast-fstests!
 ## fast-fstests relies on:
-* [fstests](https://github.com/kdave/xfstests)
-* [pytest](https://docs.pytest.org/en/stable/getting-started.html)
-* [pytest-xdist](https://pypi.org/project/pytest-xdist/) - for parallelizing pytest
-* [filelock](https://pypi.org/project/filelock/) - locking mechanism for parallel tests
-## fast-fstests optionally uses:
+* [fstests](https://github.com/btrfs/fstests)
 * [mkosi](https://github.com/systemd/mkosi) - for managing virtual machines
 * [mkosi-kernel](https://github.com/DaanDeMeyer/mkosi-kernel) - for configuring mkosi
 
-# fast-fstests configuration
-* fast-fstests can be configured via a pytest.ini file or via cli arguments.
-* Example included at pytest.ini.example.
-* fast-fstests options set in pytest.ini are overridden by command line flags,
-unless it's a list argument, in which case command line flags will append to pytest.ini options.
-
-| pytest.ini option | command line flag | description |
-| :- | :- | -: |
-| targetpaths | --targetpath | Specify targetpaths to run fstests on.<br>HOSTNAME:PATH-TO-FSTESTS eg. vm1:/home/fstests |
-| mkosi | --mkosi | Specify the number of mkosi hosts to create. |
-| mkosi_config_dir | --mkosi-config-dir | Path to mkosi configuration directory. |
-| mkosi_options | --mkosi-options | Options to pass to mkosi when launching qemu. |
-| mkosi_fstests_dir | --mkosi-fstests-dir | Path to fstests on mkosi. |
-| mkosi_setup_timeout | --mkosi-setup-timeout | How long to wait in seconds for mkosi setup before aborting. (default 60s) |
-| host_fstests_dir | --host-fstests-dir | Path to fstests on host. |
-| tests | --tests | List of tests to run e.g. btrfs/001 or generic/100. (can't be used with group) |
-| group | --group | Name of group to run e.g. btrfs/quick or auto. (can't be used with tests) |
-| excludes | --excludes | List of tests to exclude. |
-| exclude_file | --exclude-file | Path to an exclude file with a test per line to exclude from test run. Cannot be used with --excludes. |
-| random | --random | Whether to randomize the order that tests are run. |
-| no_cleanup_on_failure | --no-cleanup-on-failure | Preserve machine if a there was a test failure. Requires manual cleanup before next fast-fstest run. `mkosi --machine {MACHINE} ssh poweroff` |
-| results_path | --results-path | Path to results directory. All test outputs stored here. |
-
-# Run fast-fstests
+## installation
 ```
-cd .../fast-fstests
-pip install pytest
-pip install pytest-xdist
-pip install filelock
-pytest src/fast-fstests.py --targetpath host1:/fstests --targetpath host2:/home/fstests --group btrfs/auto
+git clone https://github.com/loemraw/fast-fstests.git
+cd fast-fstests
+pip install -e .
+fast-fstests --help
 ```
 
-# Running with mkosi
-Though mkosi is optional I find the convenience of not managing vms very appealing.
+## configuration
+* fast-fstests can be configured via a config.toml file or via cli arguments
+* config file path may be changed via environment variable `FAST_FSTESTS_CONFIG_PATH`
+* example included at config.toml.example
+* cli flags always override config.toml options
+
+### Top-Level
+
+| Option         | Type      | CLI Argument(s)         | Description                                 |
+|----------------|-----------|-------------------------|---------------------------------------------|
+| `fstests`      | Path      | `--fstests`             | **Required.** Path to the fstests directory.|
+| `results_dir`  | Path      | `--results-dir`         | Path to store test results.                 |
+| `keep_alive`   | bool      | `--keep-alive`, `--no-keep-alive`          | Keep hosts alive for debugging.             |
+
+### `[test_selection]` Section
+
+| Option              | Type         | CLI Argument(s)                 | Description                                 |
+|---------------------|--------------|---------------------------------|---------------------------------------------|
+| `tests`             | list[str]    | `[TEST...]`                     | List of tests to run.                       |
+| `groups`            | list[str]    | `--groups`, `-g`                | List of groups to include.                  |
+| `exclude_tests`     | list[str]    | `--exclude-tests`, `-e`         | List of tests to exclude.                   |
+| `exclude_tests_file`| Path         | `--exclude-tests-file`, `-E`    | Path to file with tests to exclude.         |
+| `exclude_groups`    | list[str]    | `--exclude-groups`, `-x`        | List of groups to exclude.                  |
+| `section`           | str          | `--section`, `-s`               | Only include specific section.              |
+| `exclude_section`   | str          | `--exclude-section`, `-S`       | Exclude specific section.                   |
+| `randomize`         | bool         | `--randomize`, `-r`             | Randomize test order.                       |
+| `iterate`           | int          | `--iterate`, `-i`               | Number of times to run each test.           |
+
+### `[mkosi]` Section
+
+| Option      | Type      | CLI Argument(s)         | Description                                 |
+|-------------|-----------|-------------------------|---------------------------------------------|
+| `num`       | int       | `--mkosi.num`, `-n`     | Number of mkosi VMs to spawn.               |
+| `config`    | Path      | `--mkosi.config`        | **Required if using mkosi** Path to mkosi config.  |
+| `options`   | list[str] | `--mkosi.options`       | List of options for mkosi.                  |
+| `fstests`   | Path      | `--mkosi.fstests`       | **Required if using mkosi** Path to fstests dir on mkosi VM.            |
+| `timeout`   | int       | `--mkosi.timeout`       | Max seconds to spawn a mkosi VM.            |
+
+### `[custom_vm]` Section
+
+| Option      | Type      | CLI Argument(s)         | Description                                 |
+|-------------|-----------|-------------------------|---------------------------------------------|
+| `vms`       | list[str] | `--vms`       | List of `HOST:PATH` pairs (e.g., `vm1:/fstests,vm2:/home/fstests`). |
+
+
+## run
+```
+fast-fstests -n 5 -g btrfs/auto
+```
+
+# Configuring Mkosi
 Here are directions for getting everything setup with mkosi.
 Caveat this guide is not intended as a comprehensive mkosi setup guide,
 it is only detailing some additional configuration needed to get mkosi working with fast-fstests.
@@ -91,7 +108,7 @@ mkosi --profile fast-fstests -f build
 3. Check if fstests runs
 ```
 mkosi --profile fast-fstests qemu
-cd .../fstests
+cd fstests
 ./check
 ```
 ./check should start running tests without needing to compile anything.
@@ -118,8 +135,5 @@ Should successfully ssh into qemu vm.
 
 6. If all steps above are working you should be good to go!
 ```
-pytest src/fast-fstests.py --mkosi 5 --group btrfs/auto
+fast-fstests --mkosi 5 --group btrfs/auto
 ```
-
-# Results
-Test results can be found at `results_path/{TEST}/{LATEST_TIMESTAMP}/` and include return code, stdout and stderr.

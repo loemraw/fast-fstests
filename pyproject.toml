@@ -1,0 +1,29 @@
+[project]
+name = "fast-fstests"
+version = "0.2.0"
+description = "parallelizes fstests across virtual machines"
+readme = "README.md"
+authors = [
+    { name = "Leo Martins", email = "loemra.dev@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mashumaro[toml]>=3.16",
+    "rich>=14.1.0",
+    "tyro>=0.9.31",
+]
+
+[project.scripts]
+fast-fstests = "fastfstests.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastfstests", "src/parallelrunner"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

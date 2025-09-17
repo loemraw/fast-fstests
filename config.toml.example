@@ -1,0 +1,11 @@
+fstests="/home/leomar/fstests/"
+results_dir="results"
+
+[mkosi]
+config="/home/leomar/mkosi-kernel/"
+options=[
+	"--profile=fast-fstests",
+	"--build-sources=/home/leomar/linux/:kernel"
+]
+fstests="/var/lib/xfstests"
+timeout=60
