@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import (
@@ -303,3 +303,28 @@ class Output:
                 yield
         finally:
             progress.remove_task(task_id)
+
+    def __render_exception_arg(self, arg: tuple[str] | str) -> RenderableType:
+        match arg:
+            case tuple():
+                return Group(*(f"• {a}" for a in arg))
+            case _:
+                return arg
+
+    def __print_exception(self, exc: Exception) -> RenderableType:
+        match exc:
+            case ExceptionGroup():
+                return Panel(
+                    Group(*(self.__print_exception(e) for e in exc.exceptions)),
+                    title=type(exc).__name__,
+                    border_style="yellow",
+                )
+            case _:
+                return Panel(
+                    Group(*(self.__render_exception_arg(a) for a in exc.args)),  # pyright: ignore[reportAny]
+                    title=type(exc).__name__,
+                    border_style="red",
+                )
+
+    def print_exception(self, exc: Exception):
+        self.console.print(self.__print_exception(exc))

@@ -54,7 +54,8 @@ class MkosiSupervisor(Supervisor):
         self.proc = proc
         try:
             await asyncio.wait_for(self.wait_for_machine(), self.config.mkosi.timeout)
-        except TimeoutError:
+        except TimeoutError as e:
+            await self.__cleanup()
             assert False, "timed out waiting for mkosi machine"
         return self
 
@@ -65,6 +66,9 @@ class MkosiSupervisor(Supervisor):
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ):
+        await self.__cleanup()
+
+    async def __cleanup(self):
         if self.proc is None:
             return
         try:
@@ -135,16 +139,16 @@ class MkosiSupervisor(Supervisor):
 
     async def wait_for_machine(self):
         while True:
-            assert self.proc is not None
-            assert self.proc.returncode is None, (
-                "waiting for machine that is not running",
+            assert self.proc is not None and self.proc.returncode is None, (
+                "waiting for machine that is not running, make sure to build your image before running fast-fstests",
+                "it's important that the image was built using the same flags you pass into fast-fstests",
                 f"mkosi invocation: {self.mkosi_command}",
                 f"mkosi config path: {self.config.mkosi.config}",
-                f"mkosi stdout: {self.proc.stdout.read()}"
-                if self.proc.stdout is not None
+                f"mkosi stdout: {(await self.proc.stdout.read()).decode()}"
+                if self.proc is not None and self.proc.stdout is not None
                 else "no mkosi stdout",
-                f"mkosi stderr: {self.proc.stderr.read()}"
-                if self.proc.stderr is not None
+                f"mkosi stderr: {(await self.proc.stderr.read()).decode()}"
+                if self.proc is not None and self.proc.stderr is not None
                 else "no mkosi stderr",
             )
 

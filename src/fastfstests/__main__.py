@@ -32,28 +32,22 @@ def main():
         logger.exception("unable to parse configuration file %s", config_path)
 
     config = tyro.cli(Config, default=default_config, prog="ff")
+    output = Output(config.results_dir)
 
     try:
-        tests = list(collect_tests(config))
-        if len(tests) == 0:
-            assert False, "no tests to run"
-
         machines: list[Supervisor] = []
         machines.extend(MkosiSupervisor.from_config(config))
-        if len(machines) == 0:
-            assert False, "no supervisors to run tests on"
+        assert len(machines) > 0, "no supervisors to run tests on"
 
-        output = Output(config.results_dir)
+        tests = list(collect_tests(config))
+        assert len(tests) > 0, "no tests to run"
+
         runner = TestRunner(tests, machines, output, config.keep_alive)
-
         asyncio.run(runner.run())
     except KeyboardInterrupt:
         pass
-    except ExceptionGroup as eg:
-        for exc in eg.exceptions:
-            print(f"- {type(exc).__name__}: {exc}")
-    except BaseException as e:
-        print(e)
+    except Exception as e:
+        output.print_exception(e)
         sys.exit(1)
 
 
