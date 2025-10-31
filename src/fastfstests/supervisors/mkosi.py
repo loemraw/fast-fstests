@@ -34,26 +34,24 @@ class MkosiSupervisor(Supervisor):
         self.name: str = name
 
         self.proc: Process | None = None
-        self.mkosi_command: list[str] = []
-
-    @override
-    async def __aenter__(self) -> Self:
-        proc = await asyncio.create_subprocess_exec(
-            self.mkosi_path,
-            *("--machine", self.name, *self.config.mkosi.options, "qemu"),
-            cwd=self.config.mkosi.config,
-            stdin=DEVNULL,
-            stdout=PIPE,
-            stderr=PIPE,
-        )
-        self.proc = proc
-        self.mkosi_command = [
+        self.mkosi_command: list[str] = [
             self.mkosi_path,
             "--machine",
             self.name,
             *self.config.mkosi.options,
             "qemu",
         ]
+
+    @override
+    async def __aenter__(self) -> Self:
+        proc = await asyncio.create_subprocess_exec(
+            *self.mkosi_command,
+            cwd=self.config.mkosi.config,
+            stdin=DEVNULL,
+            stdout=PIPE,
+            stderr=PIPE,
+        )
+        self.proc = proc
         try:
             await asyncio.wait_for(self.wait_for_machine(), self.config.mkosi.timeout)
         except TimeoutError:
@@ -137,8 +135,17 @@ class MkosiSupervisor(Supervisor):
 
     async def wait_for_machine(self):
         while True:
-            assert self.proc is not None and self.proc.returncode is None, (
-                f"waiting for machine that is not running:\n{self.mkosi_command}\n{self.config.mkosi.config}\n{await self.proc.stdout.read()}\n{await self.proc.stderr.read()}"
+            assert self.proc is not None
+            assert self.proc.returncode is None, (
+                "waiting for machine that is not running",
+                f"mkosi invocation: {self.mkosi_command}",
+                f"mkosi config path: {self.config.mkosi.config}",
+                f"mkosi stdout: {self.proc.stdout.read()}"
+                if self.proc.stdout is not None
+                else "no mkosi stdout",
+                f"mkosi stderr: {self.proc.stderr.read()}"
+                if self.proc.stderr is not None
+                else "no mkosi stderr",
             )
 
             proc = await asyncio.create_subprocess_exec(
