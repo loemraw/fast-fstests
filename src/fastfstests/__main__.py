@@ -49,6 +49,9 @@ def main():
         asyncio.run(runner.run())
     except KeyboardInterrupt:
         pass
+    except ExceptionGroup as eg:
+        for exc in eg.exceptions:
+            print(f"- {type(exc).__name__}: {exc}")
     except BaseException as e:
         print(e)
         sys.exit(1)
