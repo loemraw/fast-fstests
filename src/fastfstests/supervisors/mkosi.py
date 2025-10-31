@@ -34,6 +34,7 @@ class MkosiSupervisor(Supervisor):
         self.name: str = name
 
         self.proc: Process | None = None
+        self.mkosi_command: list[str] = []
 
     @override
     async def __aenter__(self) -> Self:
@@ -46,6 +47,13 @@ class MkosiSupervisor(Supervisor):
             stderr=PIPE,
         )
         self.proc = proc
+        self.mkosi_command = [
+            self.mkosi_path,
+            "--machine",
+            self.name,
+            *self.config.mkosi.options,
+            "qemu",
+        ]
         try:
             await asyncio.wait_for(self.wait_for_machine(), self.config.mkosi.timeout)
         except TimeoutError:
@@ -130,7 +138,7 @@ class MkosiSupervisor(Supervisor):
     async def wait_for_machine(self):
         while True:
             assert self.proc is not None and self.proc.returncode is None, (
-                f"waiting for machine that is not running:\n{await self.proc.stdout.read()}\n{await self.proc.stderr.read()}"
+                f"waiting for machine that is not running:\n{self.mkosi_command}\n{self.config.mkosi.config}\n{await self.proc.stdout.read()}\n{await self.proc.stderr.read()}"
             )
 
             proc = await asyncio.create_subprocess_exec(
