@@ -42,8 +42,8 @@ class MkosiSupervisor(Supervisor):
             *("--machine", self.name, *self.config.mkosi.options, "qemu"),
             cwd=self.config.mkosi.config,
             stdin=DEVNULL,
-            stdout=DEVNULL,
-            stderr=DEVNULL,
+            stdout=PIPE,
+            stderr=PIPE,
         )
         self.proc = proc
         try:
@@ -130,7 +130,7 @@ class MkosiSupervisor(Supervisor):
     async def wait_for_machine(self):
         while True:
             assert self.proc is not None and self.proc.returncode is None, (
-                "waiting for machine that is not running"
+                f"waiting for machine that is not running:\n{self.proc.stdout}\n{self.proc.stderr}"
             )
 
             proc = await asyncio.create_subprocess_exec(
