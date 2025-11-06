@@ -283,9 +283,10 @@ class Output:
                 str(len(self._summary.errored)),
             )
 
-        self.console.print()
-        self.console.print(Rule(" Summary", align="left"))
-        self.console.print(table)
+        if table.rows:
+            self.console.print()
+            self.console.print(Rule(" Summary", align="left"))
+            self.console.print(table)
 
         if self._summary.failed + self._summary.errored:
             self.console.print()
