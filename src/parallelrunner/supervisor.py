@@ -4,7 +4,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Self
 
-from .test import Test, TestResult
+from .test import Test
 
 class Supervisor(ABC):
     @abstractmethod
