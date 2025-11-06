@@ -185,7 +185,10 @@ def collect_tests(config: Config) -> Iterable[Test]:
     tests = list(tests)
 
     if (file_system := config.test_selection.file_system) is not None:
+        prev_tests = len(tests)
         tests = [test for test in tests if file_system in test or "generic" in test]
+        if not tests and prev_tests:
+            logger.warning("no tests match your specified file system: %s", file_system)
 
     assert config.test_selection.iterate >= 1, (
         "test_selection iterate value must be greater than or equal to 1"
