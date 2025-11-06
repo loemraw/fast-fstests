@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARNING)
 
     config_path = os.getenv("FAST_FSTESTS_CONFIG_PATH") or "config.toml"
     default_config = None
