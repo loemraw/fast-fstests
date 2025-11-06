@@ -90,6 +90,12 @@ class TestSelection:
     list: Annotated[bool, arg(aliases=["-l"], help_behavior_hint=hbh)] = False
     """list tests to run, but don't actually run any tests"""
 
+    file_system: Annotated[
+        str | None, arg(metavar="FILESYSTEM", help_behavior_hint=hbh)
+    ] = None
+    """specify file system to be tested"""
+
+
 @dataclass
 class MkosiOptions:
     num: Annotated[int, arg(aliases=["-n"], help_behavior_hint=hbh)] = 0

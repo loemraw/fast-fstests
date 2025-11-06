@@ -57,6 +57,7 @@ fast-fstests --help
 | `randomize`         | bool         | `--randomize`, `-r`             | Randomize test order.                       |
 | `iterate`           | int          | `--iterate`, `-i`               | Number of times to run each test.           |
 | `list`              | bool         | `--list`, `-l`                  | List tests without running any.             |
+| `file_system`       | str          | `--file-system`                 | Specify file system to be tested (equivalent to -btrfs or -xfs for ./check) |
 
 ### `[mkosi]` Section
 

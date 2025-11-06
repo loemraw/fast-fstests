@@ -183,6 +183,10 @@ def collect_tests(config: Config) -> Iterable[Test]:
         tests.difference_update(get_tests_for_group(group, config))
 
     tests = list(tests)
+
+    if (file_system := config.test_selection.file_system) is not None:
+        tests = [test for test in tests if file_system in test or "generic" in test]
+
     assert config.test_selection.iterate >= 1, (
         "test_selection iterate value must be greater than or equal to 1"
     )

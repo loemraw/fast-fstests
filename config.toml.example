@@ -9,3 +9,6 @@ options=[
 ]
 fstests="/var/lib/xfstests"
 timeout=60
+
+[test_selection]
+file_system="btrfs"
