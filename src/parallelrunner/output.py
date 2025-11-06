@@ -139,7 +139,7 @@ class Output:
             with self._live:
                 yield self
         finally:
-            self.show_test_summary()
+            self.show_summary()
 
     @contextmanager
     def running_test(self, test: Test):
@@ -229,7 +229,7 @@ class Output:
             f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
         )
 
-    def show_test_summary(self):
+    def show_summary(self):
         for result in self._summary.failed + self._summary.errored:
             if result.status == TestStatus.FAIL:
                 status = "[red bold]Failed:[/red bold]"
@@ -286,6 +286,16 @@ class Output:
         self.console.print()
         self.console.print(Rule(" Summary", align="left"))
         self.console.print(table)
+
+        if self._summary.failed + self._summary.errored:
+            self.console.print()
+            self.console.print(Rule(" Failure List", align="left"))
+            self.console.print(
+                *(
+                    result.name
+                    for result in self._summary.failed + self._summary.errored
+                )
+            )
 
     @contextmanager
     def keeping_alive(self):
