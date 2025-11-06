@@ -116,6 +116,9 @@ class MkosiOptions:
     timeout: Annotated[int, arg(metavar="SECONDS", help_behavior_hint=hbh)] = 30
     """max number of seconds to spawn a mkosi vm"""
 
+    build: Annotated[bool, arg(help_behavior_hint=hbh)] = False
+    """build the image before spawning vms"""
+
 
 @dataclass
 class CustomVMOptions:

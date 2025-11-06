@@ -2,6 +2,7 @@ import asyncio
 import random
 import shutil
 import string
+import subprocess
 import time
 from asyncio.subprocess import DEVNULL, PIPE, Process
 from collections.abc import AsyncGenerator, Iterable
@@ -16,7 +17,7 @@ from parallelrunner.test import Test
 
 class MkosiSupervisor(Supervisor):
     @staticmethod
-    def from_config(config: Config) -> Iterable["Supervisor"]:
+    def from_config(config: Config) -> Iterable["MkosiSupervisor"]:
         for i in range(config.mkosi.num):
             suffix = "".join(random.choice(string.ascii_lowercase) for _ in range(8))
             name: str = f"ff-{i}-{suffix}"
@@ -41,6 +42,20 @@ class MkosiSupervisor(Supervisor):
             *self.config.mkosi.options,
             "qemu",
         ]
+
+    def build(self):
+        build_command = list(self.mkosi_command)
+        build_command.insert(-1, "-f")
+        build_command[-1] = "build"
+        proc = subprocess.run(
+            build_command,
+            cwd=self.config.mkosi.config,
+        )
+        assert proc.returncode == 0, (
+            "build failed",
+            proc.returncode,
+            build_command,
+        )
 
     @override
     async def __aenter__(self) -> Self:

@@ -68,6 +68,7 @@ fast-fstests --help
 | `options`   | list[str] | `--mkosi.options`       | List of options for mkosi.                  |
 | `fstests`   | Path      | `--mkosi.fstests`       | **Required if using mkosi** Path to fstests dir on mkosi VM.            |
 | `timeout`   | int       | `--mkosi.timeout`       | Max seconds to spawn a mkosi VM.            |
+| `build`     | bool      | `--mkosi.build`         | Build the mkosi image before spawning VMs.   |
 
 ### `[custom_vm]` Section
 
