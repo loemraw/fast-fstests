@@ -87,6 +87,8 @@ class TestSelection:
     iterate: Annotated[int, arg(aliases=["-i"], help_behavior_hint=hbh)] = 1
     """number of times to run each test"""
 
+    list: Annotated[bool, arg(aliases=["-l"], help_behavior_hint=hbh)] = False
+    """list tests to run, but don't actually run any tests"""
 
 @dataclass
 class MkosiOptions:

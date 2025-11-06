@@ -56,6 +56,7 @@ fast-fstests --help
 | `exclude_section`   | str          | `--exclude-section`, `-S`       | Exclude specific section.                   |
 | `randomize`         | bool         | `--randomize`, `-r`             | Randomize test order.                       |
 | `iterate`           | int          | `--iterate`, `-i`               | Number of times to run each test.           |
+| `list`              | bool         | `--list`, `-l`                  | List tests without running any.             |
 
 ### `[mkosi]` Section
 

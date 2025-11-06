@@ -33,14 +33,18 @@ def main():
 
     config = tyro.cli(Config, default=default_config, prog="ff")
     output = Output(config.results_dir)
+    machines: list[Supervisor] = []
 
     try:
-        machines: list[Supervisor] = []
-        machines.extend(MkosiSupervisor.from_config(config))
-        assert len(machines) > 0, "no supervisors to run tests on"
 
         tests = list(collect_tests(config))
+        if config.test_selection.list:
+            print(*[test.name for test in tests], sep="\n")
+            return
         assert len(tests) > 0, "no tests to run"
+
+        machines.extend(mkosi_machines)
+        assert len(machines) > 0, "no supervisors to run tests on"
 
         runner = TestRunner(tests, machines, output, config.keep_alive)
         asyncio.run(runner.run())
