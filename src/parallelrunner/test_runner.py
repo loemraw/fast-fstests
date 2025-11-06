@@ -68,6 +68,5 @@ class TestRunner:
                 with self.output.cleaning_supervisor(supervisor):
                     await supervisor.__aexit__(exc_type, exc_value, traceback)
 
-            _ = await asyncio.gather(
-                *[supervisor_exit(supervisor) for supervisor in self.supervisors]
-            )
+            for supervisor in self.supervisors:
+                await supervisor_exit(supervisor)
