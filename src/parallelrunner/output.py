@@ -148,8 +148,8 @@ class Output:
             yield
         finally:
             self._test_progress.remove_task(task_id)
-            assert test.result is not None, "unable to get test result"
-            self._test_done(test.result)
+            if test.result is not None:
+                self._test_done(test.result)
 
     def _test_done(self, result: TestResult):
         self.log_result(result)
