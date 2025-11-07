@@ -51,22 +51,20 @@ class TestRunner:
             await self._cleanup_supervisors()
 
     async def _spawn_supervisors(self):
+        async def spawn_supervisor(supervisor: Supervisor):
+            with self.output.spawning_supervisor(supervisor):
+                return await supervisor.__aenter__()
+
         with self.output.spawning_supervisors(len(self.supervisors)):
             async with asyncio.TaskGroup() as tg:
                 for supervisor in self.supervisors:
-                    _ = tg.create_task(self._spawn_supervisor(supervisor))
-
-    async def _spawn_supervisor(self, supervisor: Supervisor):
-        with self.output.spawning_supervisor(supervisor):
-            return await supervisor.__aenter__()
+                    _ = tg.create_task(spawn_supervisor(supervisor))
 
     async def _cleanup_supervisors(self):
+        async def supervisor_exit(supervisor: Supervisor):
+            with self.output.cleaning_supervisor(supervisor):
+                await supervisor.__aexit__(*sys.exc_info())
+
         with self.output.cleaning_supervisors(len(self.supervisors)):
-            exc_type, exc_value, traceback = sys.exc_info()
-
-            async def supervisor_exit(supervisor: Supervisor):
-                with self.output.cleaning_supervisor(supervisor):
-                    await supervisor.__aexit__(exc_type, exc_value, traceback)
-
             for supervisor in self.supervisors:
                 await supervisor_exit(supervisor)
