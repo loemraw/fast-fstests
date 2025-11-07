@@ -73,6 +73,8 @@ class MkosiSupervisor(Supervisor):
         except TimeoutError:
             self.__cleanup()
             assert False, "timed out waiting for mkosi machine"
+        except asyncio.CancelledError:
+            self.__cleanup()
         return self
 
     @override
