@@ -106,7 +106,10 @@ class Output:
         finally:
             self._supervisor_progress.remove_task(task_id)
             self._supervisors_progress.advance(self._supervisor_task_id)
-            self.console.print(f"  [bold green]spawn[/bold green] {supervisor}")
+            if supervisor.exited:
+                self.console.print(f"  [bold green]exit[/bold green] {supervisor}")
+            else:
+                self.console.print(f"  [bold green]spawn[/bold green] {supervisor}")
 
     @contextmanager
     def cleaning_supervisors(self, num_supervisors: int):

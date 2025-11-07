@@ -35,6 +35,7 @@ class MkosiSupervisor(Supervisor):
         self.name: str = name
 
         self.proc: Process | None = None
+        self._exited: bool = False
         self.mkosi_command: list[str] = [
             self.mkosi_path,
             "--machine",
@@ -84,12 +85,13 @@ class MkosiSupervisor(Supervisor):
         self.__cleanup()
 
     def __cleanup(self):
+        self._exited = True
         if self.proc is None:
             return
         try:
             self.proc.terminate()
         except ProcessLookupError:
-            return
+            pass
 
     @override
     async def run_tests(self) -> AsyncGenerator[None, Test]:
@@ -173,3 +175,8 @@ class MkosiSupervisor(Supervisor):
             if await proc.wait() == 0:
                 return
             await asyncio.sleep(1)
+
+    @property
+    @override
+    def exited(self) -> bool:
+        return self._exited

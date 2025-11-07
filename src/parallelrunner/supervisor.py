@@ -27,3 +27,8 @@ class Supervisor(ABC):
     @abstractmethod
     async def collect_artifact(self, path: Path) -> bytes | None:
         pass
+
+    @property
+    @abstractmethod
+    def exited(self) -> bool:
+        pass
