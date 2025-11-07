@@ -69,8 +69,8 @@ class MkosiSupervisor(Supervisor):
         self.proc = proc
         try:
             await asyncio.wait_for(self.wait_for_machine(), self.config.mkosi.timeout)
-        except TimeoutError as e:
-            await self.__cleanup()
+        except TimeoutError:
+            self.__cleanup()
             assert False, "timed out waiting for mkosi machine"
         return self
 
@@ -81,24 +81,13 @@ class MkosiSupervisor(Supervisor):
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ):
-        await self.__cleanup()
+        self.__cleanup()
 
-    async def __cleanup(self):
+    def __cleanup(self):
         if self.proc is None:
             return
         try:
             self.proc.terminate()
-            _ = await asyncio.wait_for(self.proc.wait(), 2)
-        except TimeoutError:
-            pass
-        except ProcessLookupError:
-            return
-
-        try:
-            self.proc.kill()
-            _ = await asyncio.wait_for(self.proc.wait(), 3)
-        except TimeoutError:
-            pass
         except ProcessLookupError:
             return
 
