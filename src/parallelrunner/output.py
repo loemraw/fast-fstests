@@ -298,7 +298,8 @@ class Output:
                 *(
                     result.name
                     for result in self._summary.failed + self._summary.errored
-                )
+                ),
+                soft_wrap=True,
             )
 
     @contextmanager
