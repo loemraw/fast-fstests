@@ -295,7 +295,7 @@ class Output:
             self.console.print()
             self.console.print(Rule(" Failure List", align="left"))
             self.console.print(
-                *(
+                *set(
                     result.name
                     for result in self._summary.failed + self._summary.errored
                 ),
