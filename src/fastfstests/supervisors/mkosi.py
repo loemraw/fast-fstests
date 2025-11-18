@@ -72,7 +72,11 @@ class MkosiSupervisor(Supervisor):
             await asyncio.wait_for(self.wait_for_machine(), self.config.mkosi.timeout)
         except TimeoutError:
             self.__cleanup()
-            assert False, "timed out waiting for mkosi machine"
+            assert False, (
+                "timed out waiting for mkosi machine",
+                (await self.proc.stdout.read()).decode() if self.proc.stdout else "",
+                (await self.proc.stderr.read()).decode() if self.proc.stderr else "",
+            )
         except asyncio.CancelledError:
             self.__cleanup()
         return self
