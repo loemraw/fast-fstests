@@ -16,6 +16,11 @@ dependencies = [
 [project.scripts]
 fast-fstests = "fastfstests.__main__:main"
 
+[project.optional-dependencies]
+plot = [
+    "plotext>=5.3.2",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

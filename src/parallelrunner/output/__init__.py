@@ -1,12 +1,12 @@
 import logging
 import os
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from rich.console import Console, Group, RenderableType
 from rich.live import Live
+from rich.padding import Padding
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -18,32 +18,36 @@ from rich.progress import (
 )
 from rich.rule import Rule
 from rich.status import Status
-from rich.table import Table
 
-from .supervisor import Supervisor
-from .test import Test, TestResult, TestStatus
+from parallelrunner.supervisor import Supervisor
+from parallelrunner.test import Test, TestResult, TestStatus
+
+from .rich_plotext import RichPlotext
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class _Summary:
-    passed: list[TestResult] = field(default_factory=list)
-    failed: list[TestResult] = field(default_factory=list)
-    skipped: list[TestResult] = field(default_factory=list)
-    errored: list[TestResult] = field(default_factory=list)
-
-
 class Output:
-    def __init__(self, results_dir: Path | None):
+    def __init__(
+        self,
+        results_dir: Path | None,
+        print_failure_list: bool = False,
+        print_n_slowest: int = 0,
+        print_duration_hist: bool = False,
+    ):
         self.console: Console = Console(highlight=False)
         self.results_dir: Path | None = results_dir
 
-        self._summary: _Summary = _Summary()
+        self._print_failure_list: bool = print_failure_list
+        self._print_n_slowest: int = print_n_slowest
+        self._print_duration_hist: bool = print_duration_hist
+
+        self._results: list[TestResult] = []
 
         self._status: Status | None = None
         self._cnt: int = 0
         self._total: int = 0
+        self._duration: int = 0
 
         self._supervisors_progress: Progress = Progress(
             SpinnerColumn(),
@@ -138,11 +142,14 @@ class Output:
         self.console.print()
         self.console.print(Rule(title=" Testing", align="left"))
         self._overall_test_progress.reset(self._overall_test_task_id, total=num_tests)
+
+        start_time = datetime.now()
         try:
             with self._live:
                 yield self
         finally:
-            self.show_summary()
+            end_time = datetime.now()
+            self._duration = (end_time - start_time).seconds
 
     @contextmanager
     def running_test(self, test: Test):
@@ -155,22 +162,19 @@ class Output:
                 self._test_done(test.result)
 
     def _test_done(self, result: TestResult):
-        self.log_result(result)
-        self._overall_test_progress.advance(self._overall_test_task_id)
-
         match result.status:
             case TestStatus.PASS:
-                self._summary.passed.append(result)
                 self._test_passed(result)
             case TestStatus.FAIL:
-                self._summary.failed.append(result)
                 self._test_failed(result)
             case TestStatus.SKIP:
-                self._summary.skipped.append(result)
                 self._test_skipped(result)
             case TestStatus.ERROR:
-                self._summary.errored.append(result)
                 self._test_errored(result)
+
+        self._overall_test_progress.advance(self._overall_test_task_id)
+        self.log_result(result)
+        self._results.append(result)
 
     def log_result(self, result: TestResult):
         if self.results_dir is None:
@@ -201,24 +205,21 @@ class Output:
 
     def _test_passed(self, result: TestResult):
         self.console.print(
-            " ",
-            "[bold green]pass[/bold green]",
+            "  [bold green]pass[/bold green]",
             result.name,
             f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
         )
 
     def _test_failed(self, result: TestResult):
         self.console.print(
-            " ",
-            "[bold red]fail[/bold red]",
+            "  [bold red]fail[/bold red]",
             result.name,
             f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
         )
 
     def _test_skipped(self, result: TestResult):
         self.console.print(
-            " ",
-            "[bold yellow]skip[/bold yellow]",
+            "  [bold yellow]skip[/bold yellow]",
             result.name,
             f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
             f"[dim]{result.summary}",
@@ -226,81 +227,142 @@ class Output:
 
     def _test_errored(self, result: TestResult):
         self.console.print(
-            " ",
-            "[bold medium_purple3]error[/bold medium_purple3]",
+            "  [bold medium_purple3]error[/bold medium_purple3]",
             result.name,
             f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
         )
 
-    def show_summary(self):
-        for result in self._summary.failed + self._summary.errored:
+    def _print_failed_details(self):
+        for result in self._results:
+            header: list[str] = []
+
             if result.status == TestStatus.FAIL:
-                status = "[red bold]Failed:[/red bold]"
+                header.append("Failed")
+            elif result.status == TestStatus.ERROR:
+                header.append("Error")
             else:
-                status = "[medium_purple3 bold]Error:[/medium_purple3 bold]"
+                continue
+
+            header.append(result.name)
+
+            if self.results_dir is not None:
+                header.append("@")
+                header.append(
+                    str(
+                        self.results_dir.joinpath(
+                            result.name,
+                            result.timestamp.strftime("%Y-%m-%d_%H-%M-%S_%f"),
+                        )
+                    )
+                )
 
             self.console.print()
             self.console.print(
                 Rule(
-                    f" {status} {result.name}",
+                    f" {' '.join(header)}",
                     align="left",
                     style="red",
                 ),
             )
 
-            if self.results_dir is not None:
+            if result.stdout:
                 self.console.print(
-                    Panel(
-                        f"{self.results_dir.joinpath(result.name, result.timestamp.strftime('%Y-%m-%d_%H-%M-%S_%f'))}",
-                        title="full results",
-                        title_align="left",
+                    Panel.fit(
+                        result.stdout.decode(), title="stdout", title_align="left"
                     )
                 )
-            self.console.print(
-                Panel(str(result.retcode), title="retcode", title_align="left")
-            )
-            self.console.print(
-                Panel(result.stdout.decode(), title="stdout", title_align="left")
-            )
-            self.console.print(
-                Panel(result.stderr.decode(), title="stderr", title_align="left")
-            )
+            if result.stderr:
+                self.console.print(
+                    Panel.fit(
+                        result.stderr.decode(), title="stderr", title_align="left"
+                    )
+                )
 
-        table = Table()
-        table.add_column("Status")
-        table.add_column("Count")
-
-        if self._summary.passed:
-            table.add_row(
-                "[bold green]Passed[/bold green]", str(len(self._summary.passed))
-            )
-        if self._summary.skipped:
-            table.add_row(
-                "[bold yellow]Skipped[/bold yellow]", str(len(self._summary.skipped))
-            )
-        if self._summary.failed:
-            table.add_row("[bold red]Failed[/bold red]", str(len(self._summary.failed)))
-        if self._summary.errored:
-            table.add_row(
-                "[bold medium_purple3]Errored[/bold medium_purple3]",
-                str(len(self._summary.errored)),
-            )
-
-        if table.rows:
-            self.console.print()
-            self.console.print(Rule(" Summary", align="left"))
-            self.console.print(table)
-
-        if self._summary.failed + self._summary.errored:
+    def _print_failed_list(self):
+        if results := [
+            r for r in self._results if r.status in (TestStatus.FAIL, TestStatus.ERROR)
+        ]:
             self.console.print()
             self.console.print(Rule(" Failure List", align="left"))
             self.console.print(
-                *set(
-                    result.name
-                    for result in self._summary.failed + self._summary.errored
-                ),
+                *set(result.name for result in results),
                 soft_wrap=True,
             )
+
+    def _print_result_counts(self):
+        self.console.print()
+        self.console.print(
+            Rule(
+                f" Summary",
+                align="left",
+            ),
+        )
+
+        if passed := [r for r in self._results if r.status == TestStatus.PASS]:
+            self.console.print(f"  [bold green]Passed[/bold green] {len(passed)}")
+        if skipped := [r for r in self._results if r.status == TestStatus.SKIP]:
+            self.console.print(f"  [bold yellow]Skipped[/bold yellow] {len(skipped)}")
+        if failed := [r for r in self._results if r.status == TestStatus.FAIL]:
+            self.console.print(f"  [bold red]Failed[/bold red] {len(failed)}")
+        if errored := [r for r in self._results if r.status == TestStatus.ERROR]:
+            self.console.print(
+                f"  [bold medium_purple3]Errored[/bold medium_purple3] {len(errored)}",
+            )
+
+        self.console.print(f"  [bold blue]Total Time[/bold blue] {self._duration}s")
+
+    def _print_slowest(self):
+        slowest = sorted(self._results, key=lambda x: x.duration, reverse=True)
+        slowest = (
+            slowest[: self._print_n_slowest]
+            if len(slowest) >= self._print_n_slowest
+            else slowest
+        )
+        if not slowest:
+            return
+        self.console.print()
+        self.console.rule(f" {len(slowest)} Slowest Tests", align="left")
+        for result in slowest:
+            self.console.print(f"  [bold]{result.name}[/bold] {int(result.duration)}s")
+
+    def _print_time_histogram(self):
+        if not self._results:
+            return
+
+        self.console.print()
+        self.console.rule(f" Test Times Histogram", align="left")
+
+        try:
+            import plotext as plt
+        except ModuleNotFoundError:
+            self.console.print(
+                f"  [bold red]Plotext not found[/bold red] make sure it is installed to print histogram"
+            )
+            return
+
+        def make_plot(width: int, height: int) -> str:
+            plt.hist([result.duration for result in self._results])
+            plt.plotsize(width, height)
+            plt.clear_color()
+            return plt.build()
+
+        self.console.print(Padding(RichPlotext(make_plot), (0, 0, 0, 2)))
+
+    def print_summary(self):
+        self._print_failed_details()
+
+        if self._print_failure_list:
+            self._print_failed_list()
+
+        if self._print_n_slowest:
+            self._print_slowest()
+
+        if self._print_duration_hist:
+            self._print_time_histogram()
+
+        self._print_result_counts()
+
+        self.console.print()
 
     @contextmanager
     def keeping_alive(self):
@@ -329,13 +391,13 @@ class Output:
     def __print_exception(self, exc: Exception) -> RenderableType:
         match exc:
             case ExceptionGroup():
-                return Panel(
+                return Panel.fit(
                     Group(*(self.__print_exception(e) for e in exc.exceptions)),
                     title=type(exc).__name__,
                     border_style="yellow",
                 )
             case _:
-                return Panel(
+                return Panel.fit(
                     Group(*(self.__render_exception_arg(a) for a in exc.args)),  # pyright: ignore[reportAny]
                     title=type(exc).__name__,
                     border_style="red",

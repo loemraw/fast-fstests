@@ -22,16 +22,19 @@ class TestRunner:
         self.keep_alive: bool = keep_alive
 
     async def run(self):
-        async with self._parallel_supervisor_cm():
-            with self.output.running_tests(len(self.tests)):
-                async with asyncio.TaskGroup() as tg:
-                    for supervisor in self.supervisors:
-                        _ = tg.create_task(self._worker(supervisor))
+        try:
+            async with self._parallel_supervisor_cm():
+                with self.output.running_tests(len(self.tests)):
+                    async with asyncio.TaskGroup() as tg:
+                        for supervisor in self.supervisors:
+                            _ = tg.create_task(self._worker(supervisor))
 
-            if self.keep_alive:
-                with self.output.keeping_alive():
-                    while True:
-                        await asyncio.sleep(1)
+                if self.keep_alive:
+                    with self.output.keeping_alive():
+                        while True:
+                            await asyncio.sleep(1)
+        finally:
+            self.output.print_summary()
 
     async def _worker(self, supervisor: Supervisor):
         runner = supervisor.run_tests()
