@@ -31,7 +31,12 @@ def main():
         logger.exception("unable to parse configuration file %s", config_path)
 
     config = tyro.cli(Config, default=default_config, prog="ff")
-    output = Output(config.results_dir)
+    output = Output(
+        config.output.results_dir,
+        print_failure_list=config.output.print_failure_list,
+        print_n_slowest=config.output.print_n_slowest,
+        print_duration_hist=config.output.print_duration_hist,
+    )
 
     try:
         tests = list(collect_tests(config))

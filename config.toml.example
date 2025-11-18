@@ -1,14 +1,21 @@
 fstests="/home/leomar/fstests/"
-results_dir="results"
 
 [mkosi]
 config="/home/leomar/mkosi-kernel/"
 options=[
 	"--profile=fast-fstests",
-	"--build-sources=/home/leomar/linux/:kernel"
+	"--build-sources=/home/leomar/linux/:kernel",
 ]
 fstests="/var/lib/xfstests"
 timeout=60
+timein=30
 
 [test_selection]
 file_system="btrfs"
+groups=["auto"]
+
+[output]
+results_dir="results"
+print_failure_list=true
+print_n_slowest=10
+print_duration_hist=true

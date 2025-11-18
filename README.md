@@ -22,10 +22,12 @@ There is between a 3-7x speed improvement, bringing down the time to run auto fr
 * [mkosi-kernel](https://github.com/DaanDeMeyer/mkosi-kernel) - for configuring mkosi
 
 ## installation
-```
+```bash
 git clone https://github.com/loemraw/fast-fstests.git
 cd fast-fstests
 pip install -e .
+# or if you want to plots in output
+pip install -e ".[plot]"
 fast-fstests --help
 ```
 
@@ -40,8 +42,15 @@ fast-fstests --help
 | Option         | Type      | CLI Argument(s)         | Description                                 |
 |----------------|-----------|-------------------------|---------------------------------------------|
 | `fstests`      | Path      | `--fstests`             | **Required.** Path to the fstests directory.|
-| `results_dir`  | Path      | `--results-dir`         | Path to store test results.                 |
 | `keep_alive`   | bool      | `--keep-alive`, `--no-keep-alive`          | Keep hosts alive for debugging.             |
+
+### `[output]` Section
+| Option         | Type      | CLI Argument(s)         | Description                                 |
+|----------------|-----------|-------------------------|---------------------------------------------|
+| `results_dir`  | Path      | `--results-dir`         | Path to store test results.                 |
+| `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
+| `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
+| `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
 
 ### `[test_selection]` Section
 

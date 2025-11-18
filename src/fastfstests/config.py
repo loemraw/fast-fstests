@@ -133,6 +133,23 @@ class CustomVMOptions:
 
 
 @dataclass
+class OutputOptions:
+    results_dir: Annotated[Path | None, arg(metavar="PATH", help_behavior_hint=hbh)] = (
+        None
+    )
+    """path results directory"""
+
+    print_failure_list: Annotated[bool, arg(help_behavior_hint=hbh)] = False
+    """print all failed tests in a pasteable way"""
+
+    print_n_slowest: Annotated[int, arg(help_behavior_hint=hbh)] = 0
+    """print n slowest tests"""
+
+    print_duration_hist: Annotated[bool, arg(help_behavior_hint=hbh)] = False
+    """print histogram of test times [plotext required]"""
+
+
+@dataclass
 class Config:
     """
     fast-fstests is an fstests wrapper that parallelizes test execution with vms
@@ -143,11 +160,6 @@ class Config:
     )
     """path to fstests"""
 
-    results_dir: Annotated[Path | None, arg(metavar="PATH", help_behavior_hint=hbh)] = (
-        None
-    )
-    """path results directory"""
-
     keep_alive: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """keep hosts alive for debugging purposes"""
 
@@ -156,3 +168,4 @@ class Config:
     )
     mkosi: MkosiOptions = field(default_factory=MkosiOptions)
     custom_vm: OmitArgPrefixes[CustomVMOptions] = field(default_factory=CustomVMOptions)
+    output: OmitArgPrefixes[OutputOptions] = field(default_factory=OutputOptions)
