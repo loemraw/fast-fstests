@@ -38,7 +38,7 @@ def hbh(hint: str) -> str:
 
 
 @dataclass
-class TestSelection:
+class TestSelectionOptions:
     tests: Annotated[
         Positional[list[str]],
         arg(metavar="[TEST...]", help_behavior_hint=hbh),
@@ -151,8 +151,8 @@ class Config:
     keep_alive: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """keep hosts alive for debugging purposes"""
 
-    test_selection: OmitArgPrefixes[TestSelection] = field(
-        default_factory=TestSelection
+    test_selection: OmitArgPrefixes[TestSelectionOptions] = field(
+        default_factory=TestSelectionOptions
     )
     mkosi: MkosiOptions = field(default_factory=MkosiOptions)
     custom_vm: OmitArgPrefixes[CustomVMOptions] = field(default_factory=CustomVMOptions)
