@@ -100,7 +100,7 @@ class MkosiSupervisor(Supervisor):
             pass
 
     @override
-    async def run_tests(self) -> AsyncGenerator[None, Test]:
+    async def run_tests(self, test_timeout: int | None) -> AsyncGenerator[None, Test]:
         test = yield
         while True:
             start = time.time()
@@ -112,7 +112,25 @@ class MkosiSupervisor(Supervisor):
                 stdout=PIPE,
                 stderr=PIPE,
             )
-            stdout, stderr = await proc.communicate()
+
+            try:
+                async with asyncio.timeout(test_timeout):
+                    stdout, stderr = await proc.communicate()
+            except TimeoutError:
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
+                end = time.time()
+                test.set_result_error(
+                    f"timed out",
+                    end - start,
+                    (await proc.stdout.read()) if proc.stdout else b"",
+                    (await proc.stderr.read()) if proc.stderr else b"",
+                )
+                test = yield
+                continue
+
             end = time.time()
             retcode = proc.returncode
             assert retcode is not None, "no returncode when running mkosi test"

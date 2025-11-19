@@ -43,6 +43,7 @@ fast-fstests --help
 |----------------|-----------|-------------------------|---------------------------------------------|
 | `fstests`      | Path      | `--fstests`             | **Required.** Path to the fstests directory.|
 | `keep_alive`   | bool      | `--keep-alive`, `--no-keep-alive`          | Keep hosts alive for debugging.             |
+| `test-timeout` | int | `--test-timeout` | Max seconds to run a test. |
 
 ### `[output]` Section
 | Option         | Type      | CLI Argument(s)         | Description                                 |

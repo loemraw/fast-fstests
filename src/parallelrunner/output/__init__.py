@@ -230,6 +230,7 @@ class Output:
             "  [bold medium_purple3]error[/bold medium_purple3]",
             result.name,
             f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
+            f"[dim]{result.summary}",
         )
 
     def _print_failed_details(self):

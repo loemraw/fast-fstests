@@ -50,7 +50,9 @@ def main():
             mkosi_machines[0].build()
         assert len(mkosi_machines) > 0, "no supervisors to run tests on"
 
-        runner = TestRunner(tests, mkosi_machines, output, config.keep_alive)
+        runner = TestRunner(
+            tests, mkosi_machines, output, config.keep_alive, config.test_timeout
+        )
         asyncio.run(runner.run())
     except KeyboardInterrupt:
         pass

@@ -15,11 +15,13 @@ class TestRunner:
         supervisors: Iterable[Supervisor],
         output: Output,
         keep_alive: bool = False,
+        test_timeout: int | None = None,
     ):
         self.tests: list[Test] = list(tests)
         self.supervisors: list[Supervisor] = list(supervisors)
         self.output: Output = output
         self.keep_alive: bool = keep_alive
+        self.test_timeout: int | None = test_timeout
 
     async def run(self):
         try:
@@ -37,7 +39,7 @@ class TestRunner:
             self.output.print_summary()
 
     async def _worker(self, supervisor: Supervisor):
-        runner = supervisor.run_tests()
+        runner = supervisor.run_tests(self.test_timeout)
         _ = await anext(runner)
         while self.tests:
             test = self.tests.pop()

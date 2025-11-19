@@ -21,7 +21,7 @@ class Supervisor(ABC):
         pass
 
     @abstractmethod
-    def run_tests(self) -> AsyncGenerator[None, Test]:
+    def run_tests(self, test_timeout: int | None) -> AsyncGenerator[None, Test]:
         pass
 
     @abstractmethod

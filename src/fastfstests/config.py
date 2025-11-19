@@ -163,6 +163,11 @@ class Config:
     keep_alive: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """keep hosts alive for debugging purposes"""
 
+    test_timeout: Annotated[
+        int | None, arg(metavar="SECONDS", help_behavior_hint=hbh)
+    ] = None
+    """max number of seconds for an individual test"""
+
     test_selection: OmitArgPrefixes[TestSelectionOptions] = field(
         default_factory=TestSelectionOptions
     )

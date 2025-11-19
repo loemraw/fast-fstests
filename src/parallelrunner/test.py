@@ -43,3 +43,16 @@ class Test(ABC):
         collect_artifact: Callable[[Path], Awaitable[bytes | None]],
     ):
         pass
+
+    def set_result_error(self, msg: str, duration: float, stdout: bytes, stderr: bytes):
+        self.result = TestResult(
+            status=TestStatus.ERROR,
+            name=self.name,
+            duration=duration,
+            timestamp=datetime.now(),
+            summary=msg,
+            retcode=-1,
+            stdout=stdout,
+            stderr=stderr,
+            artifacts={},
+        )
