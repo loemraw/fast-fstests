@@ -50,8 +50,18 @@ def main():
             mkosi_machines[0].build()
         assert len(mkosi_machines) > 0, "no supervisors to run tests on"
 
+        assert (
+            config.test_runner.bpftrace is None
+            or config.test_runner.bpftrace_script is None
+        ), "cannot specify --bpftrace and --bpftrace-script"
+
         runner = TestRunner(
-            tests, mkosi_machines, output, config.keep_alive, config.test_timeout
+            tests,
+            mkosi_machines,
+            output,
+            config.test_runner.keep_alive,
+            config.test_runner.test_timeout,
+            config.test_runner.bpftrace or config.test_runner.bpftrace_script,
         )
         asyncio.run(runner.run())
     except KeyboardInterrupt:

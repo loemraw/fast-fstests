@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from pathlib import Path
+from contextlib import asynccontextmanager
 from types import TracebackType
-from typing import Self
+from typing import IO, AnyStr, Self
 
 from .test import Test
+
 
 class Supervisor(ABC):
     @abstractmethod
@@ -21,11 +22,17 @@ class Supervisor(ABC):
         pass
 
     @abstractmethod
-    def run_tests(self, test_timeout: int | None) -> AsyncGenerator[None, Test]:
+    async def run_test(self, test: Test, timeout: int | None):
         pass
 
+    @asynccontextmanager
     @abstractmethod
-    async def collect_artifact(self, path: Path) -> bytes | None:
+    def trace(
+        self,
+        command: str | None,
+        stdout: int | IO[AnyStr] | None,
+        stderr: int | IO[AnyStr] | None,
+    ) -> AsyncGenerator[None, None]:
         pass
 
     @property

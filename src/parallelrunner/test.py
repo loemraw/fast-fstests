@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable
 
 
 class TestStatus(Enum):
@@ -20,39 +18,40 @@ class TestResult:
     name: str
     duration: float
     timestamp: datetime
-    summary: str
-    retcode: int
-    stdout: bytes
-    stderr: bytes
+    summary: str | None
+    retcode: int | None
+    stdout: bytes | None
+    stderr: bytes | None
     artifacts: dict[str, bytes]
 
 
 @dataclass
 class Test(ABC):
     name: str
-    test: str
+    test_cmd: str
+    artifact_paths: list[Path] = field(default_factory=list)
     result: TestResult | None = None
 
     @abstractmethod
-    async def set_result(
+    def set_result(
         self,
         duration: float,
         retcode: int,
         stdout: bytes,
         stderr: bytes,
-        collect_artifact: Callable[[Path], Awaitable[bytes | None]],
+        artifacts: dict[str, bytes],
     ):
         pass
 
-    def set_result_error(self, msg: str, duration: float, stdout: bytes, stderr: bytes):
+    def set_result_error(self, msg: str, duration: float):
         self.result = TestResult(
             status=TestStatus.ERROR,
             name=self.name,
             duration=duration,
             timestamp=datetime.now(),
             summary=msg,
-            retcode=-1,
-            stdout=stdout,
-            stderr=stderr,
+            retcode=None,
+            stdout=None,
+            stderr=None,
             artifacts={},
         )

@@ -150,6 +150,28 @@ class OutputOptions:
 
 
 @dataclass
+class TestRunnerOptions:
+    keep_alive: Annotated[bool, arg(help_behavior_hint=hbh)] = False
+    """keep hosts alive for debugging purposes"""
+
+    test_timeout: Annotated[
+        int | None, arg(metavar="SECONDS", help_behavior_hint=hbh)
+    ] = None
+    """max number of seconds for an individual test"""
+
+    bpftrace: Annotated[str | None, arg(metavar="BPFTRACE", help_behavior_hint=hbh)] = (
+        None
+    )
+    """bpftrace script to be executed with -e"""
+
+    bpftrace_script: Annotated[
+        Path | None, arg(metavar="PATH", help_behavior_hint=hbh)
+    ] = None
+    """path to bpftrace script on vm"""
+
+
+
+@dataclass
 class Config:
     """
     fast-fstests is an fstests wrapper that parallelizes test execution with vms
@@ -160,17 +182,12 @@ class Config:
     )
     """path to fstests"""
 
-    keep_alive: Annotated[bool, arg(help_behavior_hint=hbh)] = False
-    """keep hosts alive for debugging purposes"""
-
-    test_timeout: Annotated[
-        int | None, arg(metavar="SECONDS", help_behavior_hint=hbh)
-    ] = None
-    """max number of seconds for an individual test"""
-
     test_selection: OmitArgPrefixes[TestSelectionOptions] = field(
         default_factory=TestSelectionOptions
     )
     mkosi: MkosiOptions = field(default_factory=MkosiOptions)
     custom_vm: OmitArgPrefixes[CustomVMOptions] = field(default_factory=CustomVMOptions)
     output: OmitArgPrefixes[OutputOptions] = field(default_factory=OutputOptions)
+    test_runner: OmitArgPrefixes[TestRunnerOptions] = field(
+        default_factory=TestRunnerOptions
+    )

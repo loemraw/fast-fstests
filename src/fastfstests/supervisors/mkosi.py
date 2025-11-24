@@ -5,10 +5,11 @@ import string
 import subprocess
 import time
 from asyncio.subprocess import DEVNULL, PIPE, Process
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import Iterable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import TracebackType
-from typing import Self, override
+from typing import IO, AnyStr, Self, override
 
 from fastfstests.config import Config
 from parallelrunner.supervisor import Supervisor
@@ -100,72 +101,84 @@ class MkosiSupervisor(Supervisor):
             pass
 
     @override
-    async def run_tests(self, test_timeout: int | None) -> AsyncGenerator[None, Test]:
-        test = yield
-        while True:
-            start = time.time()
-            proc = await asyncio.create_subprocess_exec(
-                self.mkosi_path,
-                *("--machine", self.name, "ssh", test.test),
-                cwd=self.config.mkosi.config,
-                stdin=DEVNULL,
-                stdout=PIPE,
-                stderr=PIPE,
-            )
+    async def run_test(self, test: Test, timeout: int | None):
+        start = time.time()
+        results = await self.run_command(test.test_cmd, timeout)
+        end = time.time()
+        duration = end - start
 
-            try:
-                async with asyncio.timeout(test_timeout):
-                    stdout, stderr = await proc.communicate()
-            except TimeoutError:
-                try:
-                    proc.terminate()
-                except ProcessLookupError:
-                    pass
-                end = time.time()
-                test.set_result_error(
-                    f"timed out",
-                    end - start,
-                    (await proc.stdout.read()) if proc.stdout else b"",
-                    (await proc.stderr.read()) if proc.stderr else b"",
-                )
-                test = yield
-                continue
+        if results is None:
+            test.set_result_error("timed out", duration)
+            return
 
-            end = time.time()
-            retcode = proc.returncode
-            assert retcode is not None, "no returncode when running mkosi test"
-            await test.set_result(
-                end - start, retcode, stdout, stderr, self.collect_artifact
-            )
-            test = yield
-
-    @override
-    async def collect_artifact(self, path: Path) -> bytes | None:
-        proc = await asyncio.create_subprocess_exec(
-            self.mkosi_path,
-            *(
-                "--machine",
-                self.name,
-                "ssh",
-                f"cat {path}",
-            ),
-            cwd=self.config.mkosi.config,
-            stdin=DEVNULL,
-            stdout=PIPE,
-            stderr=PIPE,
+        retcode, stdout, stderr = results
+        test.set_result(
+            end - start, retcode, stdout, stderr, await self.collect_artifacts(test)
         )
 
+    @asynccontextmanager
+    @override
+    async def trace(
+        self,
+        command: str | None,
+        stdout: int | IO[AnyStr] | None,
+        stderr: int | IO[AnyStr] | None,
+    ):
+        if command is None:
+            yield
+            return
+
+        proc = await self.start_command(command, stdout=stdout, stderr=stderr)
+        await asyncio.sleep(2)
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), 5)
-        except TimeoutError:
-            return
-        if stderr:
-            return
-        return stdout
+            yield
+        finally:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
 
     @override
     def __repr__(self):
         return f"mkosi --machine {self.name}"
+
+    @property
+    @override
+    def exited(self) -> bool:
+        return self._exited
+
+    async def start_command(
+        self,
+        command: str,
+        stdout: int | IO[AnyStr] | None = PIPE,
+        stderr: int | IO[AnyStr] | None = PIPE,
+    ):
+        return await asyncio.create_subprocess_exec(
+            self.mkosi_path,
+            *("--machine", self.name, "ssh"),
+            command,
+            cwd=self.config.mkosi.config,
+            stdin=DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    async def run_command(
+        self, command: str, timeout: int | None
+    ) -> tuple[int, bytes, bytes] | None:
+        proc = await self.start_command(command)
+        try:
+            async with asyncio.timeout(timeout):
+                stdout, stderr = await proc.communicate()
+        except TimeoutError:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+            return
+
+        assert proc.returncode is not None, f"command retcode is None for {command}"
+        return (proc.returncode, stdout, stderr)
 
     async def wait_for_machine(self):
         while True:
@@ -182,25 +195,25 @@ class MkosiSupervisor(Supervisor):
                 else "no mkosi stderr",
             )
 
-            proc = await asyncio.create_subprocess_exec(
-                self.mkosi_path,
-                *(
-                    "--machine",
-                    self.name,
-                    "ssh",
-                    "echo POKE",
-                ),
-                cwd=self.config.mkosi.config,
-                stdin=DEVNULL,
-                stdout=DEVNULL,
-                stderr=DEVNULL,
-            )
-
-            if await proc.wait() == 0:
+            results = await self.run_command("echo POKE", 1)
+            if results is None:
+                continue
+            if results[0] == 0:
                 return
-            await asyncio.sleep(1)
 
-    @property
-    @override
-    def exited(self) -> bool:
-        return self._exited
+    async def collect_artifacts(self, test: Test) -> dict[str, bytes]:
+        async def collect_artifact(path: Path) -> tuple[str, bytes] | None:
+            res = await self.run_command(f"cat {str(path)}", 5)
+            if res is None:
+                return
+            return path.name, res[1]
+
+        return dict(
+            [
+                t
+                for t in await asyncio.gather(
+                    *[collect_artifact(path) for path in test.artifact_paths]
+                )
+                if t is not None
+            ]
+        )

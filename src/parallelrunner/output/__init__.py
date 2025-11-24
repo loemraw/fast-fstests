@@ -184,11 +184,13 @@ class Output:
         path = self.results_dir.joinpath(result.name, date)
         os.makedirs(path)
 
-        with open(path.joinpath("stdout"), "wb") as f:
-            _ = f.write(result.stdout)
+        if result.stdout:
+            with open(path.joinpath("stdout"), "wb") as f:
+                _ = f.write(result.stdout)
 
-        with open(path.joinpath("stderr"), "wb") as f:
-            _ = f.write(result.stderr)
+        if result.stderr:
+            with open(path.joinpath("stderr"), "wb") as f:
+                _ = f.write(result.stderr)
 
         with open(path.joinpath("retcode"), "w") as f:
             _ = f.write(str(result.retcode))
@@ -406,3 +408,17 @@ class Output:
 
     def print_exception(self, exc: Exception):
         self.console.print(self.__print_exception(exc))
+
+    @contextmanager
+    def log_bpftrace(self):
+        if self.results_dir is None:
+            yield (None, None)
+            return
+
+        date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        path = self.results_dir.joinpath("bpftrace", date)
+        os.makedirs(path, exist_ok=True)
+
+        with open(path.joinpath("stdout"), "w") as stdout:
+            with open(path.joinpath("stderr"), "w") as stderr:
+                yield (stdout, stderr)

@@ -1,13 +1,11 @@
 import glob
 import logging
 import random
-import re
 import subprocess
-from asyncio import Task, TaskGroup
-from collections.abc import Awaitable, Iterable
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, override
+from typing import override
 
 from parallelrunner import Test, TestResult, TestStatus
 
@@ -29,16 +27,16 @@ class FSTest(Test):
             check_options.extend(("-S", section))
 
         test = f"cd {str(mkosi_fstests)}; ./check {' '.join(check_options)} {name}"
-        super().__init__(name, test)
+        super().__init__(name, test, [mkosi_fstests.joinpath(f"results/*/{name}*")])
 
     @override
-    async def set_result(
+    def set_result(
         self,
         duration: float,
         retcode: int,
         stdout: bytes,
         stderr: bytes,
-        collect_artifact: Callable[[Path], Awaitable[bytes | None]],
+        artifacts: dict[str, bytes],
     ):
         match retcode:
             case 0:
@@ -50,7 +48,6 @@ class FSTest(Test):
                 status = TestStatus.FAIL
 
         summary = " ".join(stdout.decode().splitlines()[7].split()[1:])
-        artifacts = await self._collect_artifacts(stdout, collect_artifact)
         self.result: TestResult | None = TestResult(
             status,
             self.name,
@@ -62,27 +59,6 @@ class FSTest(Test):
             stderr,
             artifacts,
         )
-
-    async def _collect_artifacts(
-        self,
-        stdout: bytes,
-        collect_artifact: Callable[[Path], Awaitable[bytes | None]],
-    ) -> dict[str, bytes]:
-        data = stdout.decode()
-        # TODO: fix hack to find all paths in output
-        matches: list[str] = re.findall(r"\/[\/A-Za-z0-9\._-]+", data)
-        paths: list[Path] = [Path(path) for path in matches if "results" in path]
-
-        tasks: list[tuple[str, Task[bytes | None]]] = []
-        async with TaskGroup() as tg:
-            for path in paths:
-
-                async def _c(p: Path):
-                    return await collect_artifact(p)
-
-                tasks.append((path.name, tg.create_task(_c(path))))
-
-        return {k: res for k, v in tasks if (res := v.result()) is not None}
 
 
 def assert_fstests(config: Config) -> Path:

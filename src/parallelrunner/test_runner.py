@@ -2,6 +2,7 @@ import asyncio
 import sys
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from .output import Output
 from .supervisor import Supervisor
@@ -16,12 +17,22 @@ class TestRunner:
         output: Output,
         keep_alive: bool = False,
         test_timeout: int | None = None,
+        bpftrace: str | Path | None = None,
     ):
         self.tests: list[Test] = list(tests)
         self.supervisors: list[Supervisor] = list(supervisors)
         self.output: Output = output
         self.keep_alive: bool = keep_alive
         self.test_timeout: int | None = test_timeout
+
+        self.bpftrace_command: str | None
+        match bpftrace:
+            case Path():
+                self.bpftrace_command = f"bpftrace {str(bpftrace)}"
+            case str():
+                self.bpftrace_command = f"bpftrace -e {bpftrace}"
+            case _:
+                self.bpftrace_command = None
 
     async def run(self):
         try:
@@ -39,13 +50,12 @@ class TestRunner:
             self.output.print_summary()
 
     async def __worker(self, supervisor: Supervisor):
-        async with supervisor.trace(self.bpftrace_command) as trace:
-            while self.tests:
-                test = self.tests.pop()
-                with self.output.running_test(test):
-                    await supervisor.run_test(test, self.test_timeout)
-
-        self.output.log_bpftrace(trace.result)
+        with self.output.log_bpftrace() as (stdout, stderr):
+            async with supervisor.trace(self.bpftrace_command, stdout, stderr):
+                while self.tests:
+                    test = self.tests.pop()
+                    with self.output.running_test(test):
+                        await supervisor.run_test(test, self.test_timeout)
 
     @asynccontextmanager
     async def __parallel_supervisor_cm(self):
