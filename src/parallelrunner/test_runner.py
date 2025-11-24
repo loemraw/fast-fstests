@@ -25,11 +25,11 @@ class TestRunner:
 
     async def run(self):
         try:
-            async with self._parallel_supervisor_cm():
+            async with self.__parallel_supervisor_cm():
                 with self.output.running_tests(len(self.tests)):
                     async with asyncio.TaskGroup() as tg:
                         for supervisor in self.supervisors:
-                            _ = tg.create_task(self._worker(supervisor))
+                            _ = tg.create_task(self.__worker(supervisor))
 
                 if self.keep_alive:
                     with self.output.keeping_alive():
@@ -38,24 +38,25 @@ class TestRunner:
         finally:
             self.output.print_summary()
 
-    async def _worker(self, supervisor: Supervisor):
-        runner = supervisor.run_tests(self.test_timeout)
-        _ = await anext(runner)
-        while self.tests:
-            test = self.tests.pop()
-            with self.output.running_test(test):
-                await runner.asend(test)
+    async def __worker(self, supervisor: Supervisor):
+        async with supervisor.trace(self.bpftrace_command) as trace:
+            while self.tests:
+                test = self.tests.pop()
+                with self.output.running_test(test):
+                    await supervisor.run_test(test, self.test_timeout)
+
+        self.output.log_bpftrace(trace.result)
 
     @asynccontextmanager
-    async def _parallel_supervisor_cm(self):
-        await self._spawn_supervisors()
+    async def __parallel_supervisor_cm(self):
+        await self.__spawn_supervisors()
 
         try:
             yield
         finally:
-            await self._cleanup_supervisors()
+            await self.__cleanup_supervisors()
 
-    async def _spawn_supervisors(self):
+    async def __spawn_supervisors(self):
         async def spawn_supervisor(supervisor: Supervisor):
             with self.output.spawning_supervisor(supervisor):
                 return await supervisor.__aenter__()
@@ -65,7 +66,7 @@ class TestRunner:
                 for supervisor in self.supervisors:
                     _ = tg.create_task(spawn_supervisor(supervisor))
 
-    async def _cleanup_supervisors(self):
+    async def __cleanup_supervisors(self):
         async def supervisor_exit(supervisor: Supervisor):
             with self.output.cleaning_supervisor(supervisor):
                 await supervisor.__aexit__(*sys.exc_info())
