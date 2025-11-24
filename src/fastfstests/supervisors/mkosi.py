@@ -208,12 +208,24 @@ class MkosiSupervisor(Supervisor):
                 return
             return path.name, res[1]
 
-        return dict(
-            [
+        async def collect_artifacts(path: Path) -> list[tuple[str, bytes]]:
+            res = await self.run_command(f"ls {str(path)}", 5)
+            if res is None:
+                return []
+            return [
                 t
                 for t in await asyncio.gather(
-                    *[collect_artifact(path) for path in test.artifact_paths]
+                    *[collect_artifact(Path(p.decode())) for p in res[1].splitlines()]
                 )
                 if t is not None
+            ]
+
+        return dict(
+            [
+                i
+                for l in await asyncio.gather(
+                    *[collect_artifacts(path) for path in test.artifact_paths]
+                )
+                for i in l
             ]
         )
