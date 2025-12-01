@@ -45,9 +45,9 @@ class MkosiSupervisor(Supervisor):
             "qemu",
         ]
 
-    def build(self):
+    def build(self, forces: int):
         build_command = list(self.mkosi_command)
-        build_command.insert(-1, "-f")
+        build_command.insert(-1, f"-{'f' * forces}")
         build_command[-1] = "build"
         proc = subprocess.run(
             build_command,

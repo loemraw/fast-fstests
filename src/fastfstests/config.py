@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import tyro
-from tyro.conf import OmitArgPrefixes, Positional, arg
+from tyro.conf import OmitArgPrefixes, Positional, UseCounterAction, arg
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,9 @@ class MkosiOptions:
     timeout: Annotated[int, arg(metavar="SECONDS", help_behavior_hint=hbh)] = 30
     """max number of seconds to spawn a mkosi vm"""
 
-    build: Annotated[bool, arg(help_behavior_hint=hbh)] = False
+    build: UseCounterAction[
+        Annotated[int, arg(aliases=["-f"], help_behavior_hint=hbh)]
+    ] = 0
     """build the image before spawning vms"""
 
 
@@ -168,7 +170,6 @@ class TestRunnerOptions:
         Path | None, arg(metavar="PATH", help_behavior_hint=hbh)
     ] = None
     """path to bpftrace script on vm"""
-
 
 
 @dataclass

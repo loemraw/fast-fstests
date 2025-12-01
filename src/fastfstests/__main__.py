@@ -46,8 +46,8 @@ def main():
         assert len(tests) > 0, "no tests to run"
 
         mkosi_machines = list(MkosiSupervisor.from_config(config))
-        if config.mkosi.build:
-            mkosi_machines[0].build()
+        if forces := config.mkosi.build:
+            mkosi_machines[0].build(forces)
         assert len(mkosi_machines) > 0, "no supervisors to run tests on"
 
         assert (
