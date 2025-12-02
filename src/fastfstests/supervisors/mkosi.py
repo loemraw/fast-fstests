@@ -195,7 +195,7 @@ class MkosiSupervisor(Supervisor):
                 else "no mkosi stderr",
             )
 
-            results = await self.run_command("echo POKE", 1)
+            results = await self.run_command("echo POKE", 5)
             if results is None:
                 continue
             if results[0] == 0:
