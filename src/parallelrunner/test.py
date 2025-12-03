@@ -14,8 +14,8 @@ class TestStatus(Enum):
 
 @dataclass
 class TestResult:
-    status: TestStatus
     name: str
+    status: TestStatus
     duration: float
     timestamp: datetime
     summary: str | None
@@ -24,34 +24,35 @@ class TestResult:
     stderr: bytes | None
     artifacts: dict[str, bytes]
 
+    @staticmethod
+    def from_error(
+        name: str, summary: str, duration: float, timestamp: datetime
+    ) -> "TestResult":
+        return TestResult(
+            name, TestStatus.ERROR, duration, timestamp, summary, None, None, None, {}
+        )
+
 
 @dataclass
 class Test(ABC):
     name: str
     test_cmd: str
     artifact_paths: list[Path] = field(default_factory=list)
-    result: TestResult | None = None
+    _id: str = field(
+        default_factory=lambda: datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+    )
+
+    @property
+    def id(self) -> str:
+        return self._id
 
     @abstractmethod
-    def set_result(
+    def make_result(
         self,
         duration: float,
         retcode: int,
         stdout: bytes,
         stderr: bytes,
         artifacts: dict[str, bytes],
-    ):
+    ) -> TestResult:
         pass
-
-    def set_result_error(self, msg: str, duration: float):
-        self.result = TestResult(
-            status=TestStatus.ERROR,
-            name=self.name,
-            duration=duration,
-            timestamp=datetime.now(),
-            summary=msg,
-            retcode=None,
-            stdout=None,
-            stderr=None,
-            artifacts={},
-        )

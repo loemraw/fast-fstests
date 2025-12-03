@@ -27,17 +27,17 @@ class FSTest(Test):
             check_options.extend(("-S", section))
 
         test = f"cd {str(mkosi_fstests)}; ./check {' '.join(check_options)} {name}"
-        super().__init__(name, test, [mkosi_fstests.joinpath(f"results/*/{name}*")])
+        super().__init__(name, test, [mkosi_fstests.joinpath(f"results/**/{name}*")])
 
     @override
-    def set_result(
+    def make_result(
         self,
         duration: float,
         retcode: int,
         stdout: bytes,
         stderr: bytes,
         artifacts: dict[str, bytes],
-    ):
+    ) -> TestResult:
         match retcode:
             case 0:
                 if b"[not run]" in stdout:
@@ -48,9 +48,9 @@ class FSTest(Test):
                 status = TestStatus.FAIL
 
         summary = " ".join(stdout.decode().splitlines()[7].split()[1:])
-        self.result: TestResult | None = TestResult(
-            status,
+        return TestResult(
             self.name,
+            status,
             duration,
             datetime.now(),
             summary,

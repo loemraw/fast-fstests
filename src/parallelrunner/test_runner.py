@@ -50,12 +50,27 @@ class TestRunner:
             self.output.print_summary()
 
     async def __worker(self, supervisor: Supervisor):
-        with self.output.log_bpftrace() as (stdout, stderr):
-            async with supervisor.trace(self.bpftrace_command, stdout, stderr):
-                while self.tests:
-                    test = self.tests.pop()
-                    with self.output.running_test(test):
-                        await supervisor.run_test(test, self.test_timeout)
+        async def run_test(test: Test):
+            with self.output.running_test(test) as (stdout, stderr):
+                result = await supervisor.run_test(
+                    test, self.test_timeout, stdout, stderr
+                )
+            self.output.finished_test(test, result)
+
+        @asynccontextmanager
+        async def bpftrace(test: Test):
+            if self.bpftrace_command is None:
+                yield
+                return
+
+            with self.output.log_bpftrace(test) as (stdout, stderr):
+                async with supervisor.trace(self.bpftrace_command, stdout, stderr):
+                    yield
+
+        while self.tests:
+            test = self.tests.pop()
+            async with bpftrace(test):
+                await run_test(test)
 
     @asynccontextmanager
     async def __parallel_supervisor_cm(self):

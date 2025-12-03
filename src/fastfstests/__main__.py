@@ -68,6 +68,7 @@ def main():
         pass
     except Exception as e:
         output.print_exception(e)
+        raise
         sys.exit(1)
 
 

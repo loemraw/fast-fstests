@@ -3,17 +3,19 @@ import random
 import shutil
 import string
 import subprocess
+import tempfile
 import time
 from asyncio.subprocess import DEVNULL, PIPE, Process
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import IO, AnyStr, Self, override
+from typing import IO, Self, override
 
 from fastfstests.config import Config
 from parallelrunner.supervisor import Supervisor
-from parallelrunner.test import Test
+from parallelrunner.test import Test, TestResult
 
 
 class MkosiSupervisor(Supervisor):
@@ -101,19 +103,34 @@ class MkosiSupervisor(Supervisor):
             pass
 
     @override
-    async def run_test(self, test: Test, timeout: int | None):
+    async def run_test(
+        self,
+        test: Test,
+        timeout: int | None,
+        stdout: IO[bytes],
+        stderr: IO[bytes],
+    ) -> TestResult:
         start = time.time()
-        results = await self.run_command(test.test_cmd, timeout)
+        retcode = await self.run_command(test.test_cmd, timeout, stdout, stderr)
         end = time.time()
         duration = end - start
 
-        if results is None:
-            test.set_result_error("timed out", duration)
-            return
+        if retcode is None:
+            return TestResult.from_error(
+                test.name, "timed out", duration, datetime.now()
+            )
 
-        retcode, stdout, stderr = results
-        test.set_result(
-            end - start, retcode, stdout, stderr, await self.collect_artifacts(test)
+        _ = stdout.seek(0)
+        out = stdout.read()
+        _ = stderr.seek(0)
+        err = stderr.read()
+
+        return test.make_result(
+            duration,
+            retcode,
+            out,
+            err,
+            await self.collect_artifacts(test),
         )
 
     @asynccontextmanager
@@ -121,14 +138,14 @@ class MkosiSupervisor(Supervisor):
     async def trace(
         self,
         command: str | None,
-        stdout: int | IO[AnyStr] | None,
-        stderr: int | IO[AnyStr] | None,
+        stdout: IO[bytes] | None,
+        stderr: IO[bytes] | None,
     ):
         if command is None:
             yield
             return
 
-        proc = await self.start_command(command, stdout=stdout, stderr=stderr)
+        proc = await self.start_command(command, stdout, stderr)
         await asyncio.sleep(2)
         try:
             yield
@@ -150,8 +167,8 @@ class MkosiSupervisor(Supervisor):
     async def start_command(
         self,
         command: str,
-        stdout: int | IO[AnyStr] | None = PIPE,
-        stderr: int | IO[AnyStr] | None = PIPE,
+        stdout: int | IO[bytes] | None = DEVNULL,
+        stderr: int | IO[bytes] | None = DEVNULL,
     ):
         return await asyncio.create_subprocess_exec(
             self.mkosi_path,
@@ -164,12 +181,16 @@ class MkosiSupervisor(Supervisor):
         )
 
     async def run_command(
-        self, command: str, timeout: int | None
-    ) -> tuple[int, bytes, bytes] | None:
-        proc = await self.start_command(command)
+        self,
+        command: str,
+        timeout: int | None,
+        stdout: int | IO[bytes] | None = DEVNULL,
+        stderr: int | IO[bytes] | None = DEVNULL,
+    ) -> int | None:
+        proc = await self.start_command(command, stdout, stderr)
         try:
             async with asyncio.timeout(timeout):
-                stdout, stderr = await proc.communicate()
+                returncode = await proc.wait()
         except TimeoutError:
             try:
                 proc.terminate()
@@ -177,8 +198,7 @@ class MkosiSupervisor(Supervisor):
                 pass
             return
 
-        assert proc.returncode is not None, f"command retcode is None for {command}"
-        return (proc.returncode, stdout, stderr)
+        return returncode
 
     async def wait_for_machine(self):
         while True:
@@ -195,27 +215,33 @@ class MkosiSupervisor(Supervisor):
                 else "no mkosi stderr",
             )
 
-            results = await self.run_command("echo POKE", 5)
-            if results is None:
+            retcode = await self.run_command("echo POKE", 5)
+            if retcode is None:
                 continue
-            if results[0] == 0:
+            if retcode == 0:
                 return
 
     async def collect_artifacts(self, test: Test) -> dict[str, bytes]:
         async def collect_artifact(path: Path) -> tuple[str, bytes] | None:
-            res = await self.run_command(f"cat {str(path)}", 5)
-            if res is None:
+            with tempfile.TemporaryFile("wb+") as f:
+                retcode = await self.run_command(f"cat {str(path)}", 5, stdout=f)
+                _ = f.seek(0)
+                out = f.read()
+            if retcode is None:
                 return
-            return path.name, res[1]
+            return path.name, out
 
         async def collect_artifacts(path: Path) -> list[tuple[str, bytes]]:
-            res = await self.run_command(f"ls {str(path)}", 5)
-            if res is None:
+            with tempfile.TemporaryFile("wb+") as f:
+                retcode = await self.run_command(f"ls {str(path)}", 5, stdout=f)
+                _ = f.seek(0)
+                out = f.read()
+            if retcode is None:
                 return []
             return [
                 t
                 for t in await asyncio.gather(
-                    *[collect_artifact(Path(p.decode())) for p in res[1].splitlines()]
+                    *[collect_artifact(Path(p.decode())) for p in out.splitlines()]
                 )
                 if t is not None
             ]

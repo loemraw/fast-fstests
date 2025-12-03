@@ -1,8 +1,10 @@
 import logging
 import os
+import shutil
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from tempfile import TemporaryFile
 
 from rich.console import Console, Group, RenderableType
 from rich.live import Live
@@ -139,6 +141,8 @@ class Output:
 
     @contextmanager
     def running_tests(self, num_tests: int):
+        self._reset_latest()
+
         self.console.print()
         self.console.print(Rule(title=" Testing", align="left"))
         self._overall_test_progress.reset(self._overall_test_task_id, total=num_tests)
@@ -155,13 +159,42 @@ class Output:
     def running_test(self, test: Test):
         task_id = self._test_progress.add_task(test.name)
         try:
-            yield
+            if self.results_dir is None:
+                with TemporaryFile("wb+") as stdout:
+                    with TemporaryFile("wb+") as stderr:
+                        yield stdout, stderr
+            else:
+                path = self._get_test_path(test)
+
+                with open(path.joinpath("stdout"), "wb+") as stdout:
+                    with open(path.joinpath("stderr"), "wb+") as stderr:
+                        yield stdout, stderr
         finally:
             self._test_progress.remove_task(task_id)
-            if test.result is not None:
-                self._test_done(test.result)
 
-    def _test_done(self, result: TestResult):
+    def _get_test_path(self, test: Test) -> Path:
+        assert self.results_dir is not None
+        path = self.results_dir.joinpath("tests", test.name, test.id)
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def _get_latest_path(self, test: Test) -> Path:
+        assert self.results_dir is not None
+        path = self.results_dir.joinpath("latest", test.name)
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def _reset_latest(self):
+        if self.results_dir is None:
+            return
+
+        path = self.results_dir.joinpath("latest")
+        if path.exists():
+            shutil.rmtree(path)
+
+    def finished_test(self, test: Test, result: TestResult):
+        self._results.append(result)
+
         match result.status:
             case TestStatus.PASS:
                 self._test_passed(result)
@@ -173,37 +206,46 @@ class Output:
                 self._test_errored(result)
 
         self._overall_test_progress.advance(self._overall_test_task_id)
-        self.log_result(result)
-        self._results.append(result)
+        self._log_result(test, result)
 
-    def log_result(self, result: TestResult):
+    def _log_result(self, test: Test, result: TestResult):
         if self.results_dir is None:
             return
 
-        date = result.timestamp.strftime("%Y-%m-%d_%H-%M-%S_%f")
-        path = self.results_dir.joinpath(result.name, date)
-        os.makedirs(path)
+        path = self._get_test_path(test)
+        latest = self._get_latest_path(test)
 
-        if result.stdout:
-            with open(path.joinpath("stdout"), "wb") as f:
-                _ = f.write(result.stdout)
+        def link(filename: str):
+            os.symlink(
+                Path(os.path.abspath(path)).joinpath(filename),
+                latest.joinpath(filename),
+            )
 
-        if result.stderr:
-            with open(path.joinpath("stderr"), "wb") as f:
-                _ = f.write(result.stderr)
+        link("stdout")
+        link("stderr")
 
         with open(path.joinpath("retcode"), "w") as f:
             _ = f.write(str(result.retcode))
+        link("retcode")
 
         with open(path.joinpath("duration"), "w") as f:
             _ = f.write(str(result.duration))
+        link("duration")
 
         with open(path.joinpath("status"), "w") as f:
             _ = f.write(str(result.status.name))
+        link("status")
 
-        for name, value in result.artifacts.items():
-            with open(path.joinpath(name), "wb") as f:
-                _ = f.write(value)
+        if result.artifacts:
+            path = path.joinpath("artifacts")
+            os.makedirs(path)
+            latest = latest.joinpath("artifacts")
+            os.makedirs(latest)
+
+            for name, value in result.artifacts.items():
+                with open(path.joinpath(name), "wb") as f:
+                    _ = f.write(value)
+                link(name)
 
     def _test_passed(self, result: TestResult):
         self.console.print(
@@ -282,13 +324,13 @@ class Output:
                 )
 
     def _print_failed_list(self):
-        if results := [
+        if tests := [
             r for r in self._results if r.status in (TestStatus.FAIL, TestStatus.ERROR)
         ]:
             self.console.print()
             self.console.print(Rule(" Failure List", align="left"))
             self.console.print(
-                *set(result.name for result in results),
+                *set(test.name for test in tests),
                 soft_wrap=True,
             )
 
@@ -315,7 +357,11 @@ class Output:
         self.console.print(f"  [bold blue]Total Time[/bold blue] {self._duration}s")
 
     def _print_slowest(self):
-        slowest = sorted(self._results, key=lambda x: x.duration, reverse=True)
+        slowest = sorted(
+            self._results,
+            key=lambda x: x.duration,
+            reverse=True,
+        )
         slowest = (
             slowest[: self._print_n_slowest]
             if len(slowest) >= self._print_n_slowest
@@ -410,15 +456,12 @@ class Output:
         self.console.print(self.__print_exception(exc))
 
     @contextmanager
-    def log_bpftrace(self):
+    def log_bpftrace(self, test: Test):
         if self.results_dir is None:
             yield (None, None)
             return
 
-        date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
-        path = self.results_dir.joinpath("bpftrace", date)
-        os.makedirs(path, exist_ok=True)
-
-        with open(path.joinpath("stdout"), "w") as stdout:
-            with open(path.joinpath("stderr"), "w") as stderr:
+        path = self._get_test_path(test)
+        with open(path.joinpath("bpftrace-stdout"), "wb+") as stdout:
+            with open(path.joinpath("bpftrace-stderr"), "wb+") as stderr:
                 yield (stdout, stderr)

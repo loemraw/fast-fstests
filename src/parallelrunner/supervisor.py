@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from types import TracebackType
-from typing import IO, AnyStr, Self
+from typing import IO, Self
 
-from .test import Test
+from .test import Test, TestResult
 
 
 class Supervisor(ABC):
@@ -22,7 +22,13 @@ class Supervisor(ABC):
         pass
 
     @abstractmethod
-    async def run_test(self, test: Test, timeout: int | None):
+    async def run_test(
+        self,
+        test: Test,
+        timeout: int | None,
+        stdout: IO[bytes],
+        stderr: IO[bytes],
+    ) -> TestResult:
         pass
 
     @asynccontextmanager
@@ -30,8 +36,8 @@ class Supervisor(ABC):
     def trace(
         self,
         command: str | None,
-        stdout: int | IO[AnyStr] | None,
-        stderr: int | IO[AnyStr] | None,
+        stdout: IO[bytes] | None,
+        stderr:  IO[bytes] | None,
     ) -> AsyncGenerator[None, None]:
         pass
 
