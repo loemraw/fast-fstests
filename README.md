@@ -42,16 +42,6 @@ fast-fstests --help
 | Option         | Type      | CLI Argument(s)         | Description                                 |
 |----------------|-----------|-------------------------|---------------------------------------------|
 | `fstests`      | Path      | `--fstests`             | **Required.** Path to the fstests directory.|
-| `keep_alive`   | bool      | `--keep-alive`, `--no-keep-alive`          | Keep hosts alive for debugging.             |
-| `test-timeout` | int | `--test-timeout` | Max seconds to run a test. |
-
-### `[output]` Section
-| Option         | Type      | CLI Argument(s)         | Description                                 |
-|----------------|-----------|-------------------------|---------------------------------------------|
-| `results_dir`  | Path      | `--results-dir`         | Path to store test results.                 |
-| `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
-| `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
-| `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
 
 ### `[test_selection]` Section
 
@@ -69,6 +59,14 @@ fast-fstests --help
 | `list`              | bool         | `--list`, `-l`                  | List tests without running any.             |
 | `file_system`       | str          | `--file-system`                 | Specify file system to be tested (equivalent to -btrfs or -xfs for ./check) |
 
+### `[test_runner]` Section
+| Option      | Type      | CLI Argument(s)         | Description                                 |
+|-------------|-----------|-------------------------|---------------------------------------------|
+| `keep_alive`   | bool      | `--keep-alive`, `--no-keep-alive`          | Keep hosts alive for debugging.             |
+| `test_timeout` | int | `--test-timeout` | Max seconds to run a test. |
+| `bpftrace` | str | `--bpftrace` | BPFTrace script to be executed with -e |
+| `bpftrace_script` | Path | `--bpftrace-script` | BPFTrace script path that will be executed on vm |
+
 ### `[mkosi]` Section
 
 | Option      | Type      | CLI Argument(s)         | Description                                 |
@@ -78,7 +76,7 @@ fast-fstests --help
 | `options`   | list[str] | `--mkosi.options`       | List of options for mkosi.                  |
 | `fstests`   | Path      | `--mkosi.fstests`       | **Required if using mkosi** Path to fstests dir on mkosi VM.            |
 | `timeout`   | int       | `--mkosi.timeout`       | Max seconds to spawn a mkosi VM.            |
-| `build`     | bool      | `--mkosi.build`         | Build the mkosi image before spawning VMs.   |
+| `build`     | int | `--mkosi.build`, `-f` | Build the mkosi image before spawning VMs, may specify multiple times -ff for different mkosi force levels. |
 
 ### `[custom_vm]` Section
 
@@ -86,6 +84,13 @@ fast-fstests --help
 |-------------|-----------|-------------------------|---------------------------------------------|
 | `vms`       | list[str] | `--vms`       | List of `HOST:PATH` pairs (e.g., `vm1:/fstests,vm2:/home/fstests`). |
 
+### `[output]` Section
+| Option         | Type      | CLI Argument(s)         | Description                                 |
+|----------------|-----------|-------------------------|---------------------------------------------|
+| `results_dir`  | Path      | `--results-dir`         | Path to store test results.                 |
+| `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
+| `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
+| `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
 
 ## run
 ```
