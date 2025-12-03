@@ -141,6 +141,9 @@ class OutputOptions:
     )
     """path results directory"""
 
+    verbose: Annotated[bool, arg(aliases=["-v"], help_behavior_hint=hbh)] = False
+    """print debugging logs to RESULTS_DIR/log"""
+
     print_failure_list: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """print all failed tests in a pasteable way"""
 
@@ -149,6 +152,10 @@ class OutputOptions:
 
     print_duration_hist: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """print histogram of test times [plotext required]"""
+
+    def __post_init__(self):
+        if self.verbose and self.results_dir is None:
+            raise ValueError("--verbose requires --results-dir to be set")
 
 
 @dataclass

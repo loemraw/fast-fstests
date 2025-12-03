@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 import shutil
 import string
@@ -16,6 +17,8 @@ from typing import IO, Self, override
 from fastfstests.config import Config
 from parallelrunner.supervisor import Supervisor
 from parallelrunner.test import Test, TestResult
+
+logger = logging.getLogger(__name__)
 
 
 class MkosiSupervisor(Supervisor):
@@ -170,6 +173,7 @@ class MkosiSupervisor(Supervisor):
         stdout: int | IO[bytes] | None = DEVNULL,
         stderr: int | IO[bytes] | None = DEVNULL,
     ):
+        logger.debug(f"running command {command}...")
         return await asyncio.create_subprocess_exec(
             self.mkosi_path,
             *("--machine", self.name, "ssh"),
@@ -215,13 +219,27 @@ class MkosiSupervisor(Supervisor):
                 else "no mkosi stderr",
             )
 
-            retcode = await self.run_command("echo POKE", 5)
+            with tempfile.TemporaryFile("wb+") as stdout:
+                with tempfile.TemporaryFile("wb+") as stderr:
+                    retcode = await self.run_command(
+                        "echo POKE", 5, stdout=stdout, stderr=stderr
+                    )
+                    _ = stdout.seek(0)
+                    _ = stderr.seek(0)
+                    logger.debug(
+                        f"waiting for machine {self!r}\nstdout %s\nstderr %s",
+                        stdout.read(),
+                        stderr.read(),
+                    )
             if retcode is None:
                 continue
             if retcode == 0:
                 return
+            await asyncio.sleep(1)
 
     async def collect_artifacts(self, test: Test) -> dict[str, bytes]:
+        logger.debug(f"collecting artifacts for test {test}")
+
         async def collect_artifact(path: Path) -> tuple[str, bytes] | None:
             with tempfile.TemporaryFile("wb+") as f:
                 retcode = await self.run_command(f"cat {str(path)}", 5, stdout=f)
@@ -229,6 +247,7 @@ class MkosiSupervisor(Supervisor):
                 out = f.read()
             if retcode is None:
                 return
+            logger.debug(f"collected artifact for {path.name}: %s", out)
             return path.name, out
 
         async def collect_artifacts(path: Path) -> list[tuple[str, bytes]]:
@@ -238,11 +257,11 @@ class MkosiSupervisor(Supervisor):
                 out = f.read()
             if retcode is None:
                 return []
+            paths = [Path(p.decode()) for p in out.splitlines()]
+            logger.debug("collecting artifacts for paths %s...", paths)
             return [
                 t
-                for t in await asyncio.gather(
-                    *[collect_artifact(Path(p.decode())) for p in out.splitlines()]
-                )
+                for t in await asyncio.gather(*[collect_artifact(p) for p in paths])
                 if t is not None
             ]
 

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig()
 
     config_path = os.getenv("FAST_FSTESTS_CONFIG_PATH") or "config.toml"
     default_config = None
@@ -37,6 +37,14 @@ def main():
         print_n_slowest=config.output.print_n_slowest,
         print_duration_hist=config.output.print_duration_hist,
     )
+
+    logging.getLogger().handlers.clear()
+    if config.output.results_dir:
+        if config.output.verbose:
+            logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger().addHandler(
+            logging.FileHandler(config.output.results_dir.joinpath("logs"), mode="w")
+        )
 
     try:
         tests = list(collect_tests(config))
