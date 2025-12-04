@@ -36,6 +36,7 @@ def main():
         print_failure_list=config.output.print_failure_list,
         print_n_slowest=config.output.print_n_slowest,
         print_duration_hist=config.output.print_duration_hist,
+        print_test_regressions=config.output.print_test_regressions,
     )
 
     logging.getLogger().handlers.clear()

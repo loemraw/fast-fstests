@@ -91,6 +91,7 @@ fast-fstests --help
 | `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
 | `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
 | `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
+| `print_test_regressions` | int | `--print-test-regressions` | Print median duration for previous test runs. The argument is the number of seconds of deviation from the median to count as a regression. |
 
 ## run
 ```

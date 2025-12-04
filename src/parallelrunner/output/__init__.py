@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import statistics
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -36,6 +37,7 @@ class Output:
         print_failure_list: bool = False,
         print_n_slowest: int = 0,
         print_duration_hist: bool = False,
+        print_test_regressions: int = 0,
     ):
         self.console: Console = Console(highlight=False)
         self.results_dir: Path | None = results_dir
@@ -43,6 +45,7 @@ class Output:
         self._print_failure_list: bool = print_failure_list
         self._print_n_slowest: int = print_n_slowest
         self._print_duration_hist: bool = print_duration_hist
+        self._print_test_regressions: int = print_test_regressions
 
         self._results: list[TestResult] = []
 
@@ -195,20 +198,18 @@ class Output:
     def finished_test(self, test: Test, result: TestResult):
         self._results.append(result)
 
-        match result.status:
-            case TestStatus.PASS:
-                self._test_passed(result)
-            case TestStatus.FAIL:
-                self._test_failed(result)
-            case TestStatus.SKIP:
-                self._test_skipped(result)
-            case TestStatus.ERROR:
-                self._test_errored(result)
-
         self._overall_test_progress.advance(self._overall_test_task_id)
         self._log_result(test, result)
 
     def _log_result(self, test: Test, result: TestResult):
+        logger.debug(f"summary for test {test}: {result.summary}")
+        self.console.print(
+            self._test_status_output(result),
+            result.name,
+            self._test_duration_output(test, result),
+            f"[dim]{result.summary}" if result.summary else "",
+        )
+
         if self.results_dir is None:
             return
 
@@ -217,7 +218,7 @@ class Output:
 
         def link(filename: str):
             os.symlink(
-                Path(os.path.abspath(path)).joinpath(filename),
+                Path(path).absolute().joinpath(filename),
                 latest.joinpath(filename),
             )
 
@@ -247,35 +248,47 @@ class Output:
                     _ = f.write(value)
                 link(name)
 
-    def _test_passed(self, result: TestResult):
-        self.console.print(
-            "  [bold green]pass[/bold green]",
-            result.name,
-            f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
-        )
+    def _test_status_output(self, result: TestResult) -> str:
+        match result.status:
+            case TestStatus.PASS:
+                return "  [bold green]pass[/bold green]"
+            case TestStatus.FAIL:
+                return "  [bold red]fail[/bold red]"
+            case TestStatus.SKIP:
+                return "  [bold yellow]skip[/bold yellow]"
+            case TestStatus.ERROR:
+                return "  [bold medium_purple3]error[/bold medium_purple3]"
 
-    def _test_failed(self, result: TestResult):
-        self.console.print(
-            "  [bold red]fail[/bold red]",
-            result.name,
-            f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
-        )
+    def _test_duration_output(self, test: Test, result: TestResult) -> str:
+        logger.debug(f"printing test regressions? {self._print_test_regressions}")
+        duration = f"[yellow]{str(timedelta(seconds=int(result.duration)))}"
+        if self._print_test_regressions <= 0:
+            return duration
 
-    def _test_skipped(self, result: TestResult):
-        self.console.print(
-            "  [bold yellow]skip[/bold yellow]",
-            result.name,
-            f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
-            f"[dim]{result.summary}",
-        )
+        times = [
+            float(path.read_text())
+            for path in [
+                Path(path).joinpath("duration")
+                for path in os.scandir(self._get_test_path(test).parent)
+                if path.is_dir()
+            ]
+            if path.is_file()
+        ]
 
-    def _test_errored(self, result: TestResult):
-        self.console.print(
-            "  [bold medium_purple3]error[/bold medium_purple3]",
-            result.name,
-            f"[yellow]{str(timedelta(seconds=int(result.duration)))}",
-            f"[dim]{result.summary}",
+        median = statistics.median(times)
+        deviation = abs(result.duration - median)
+        bounded_deviation = (
+            min(float(self._print_test_regressions), deviation)
+            / self._print_test_regressions
         )
+        if result.duration > median:
+            g = b = int(255 * (1 - bounded_deviation))
+            color = f"#ff{g:02x}{b:02x}"
+        else:
+            r = b = int(255 * (1 - bounded_deviation))
+            color = f"#{r:02x}ff{b:02x}"
+
+        return f"{duration} [{color}]\\[p50 {str(timedelta(seconds=int(median)))}]"
 
     def _print_failed_details(self):
         for result in self._results:

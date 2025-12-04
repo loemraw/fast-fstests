@@ -153,9 +153,23 @@ class OutputOptions:
     print_duration_hist: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """print histogram of test times [plotext required]"""
 
+    print_test_regressions: Annotated[int, arg(metavar="SECONDS", help_behavior_hint=hbh)] = 0
+    """
+    print median duration for previous test runs,
+    SECONDS must be a positive integer
+    how many SECONDS of deviation from the median
+    represent a regression
+    """
+
     def __post_init__(self):
         if self.verbose and self.results_dir is None:
             raise ValueError("--verbose requires --results-dir to be set")
+
+        if self.print_test_regressions and self.results_dir is None:
+            raise ValueError("--print-test-regressions requires --results-dir to be set")
+        if self.print_test_regressions < 0:
+            raise ValueError("--print-test-regressions must be >= 0")
+
 
 
 @dataclass
