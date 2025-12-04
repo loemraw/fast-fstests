@@ -26,7 +26,7 @@ There is between a 3-7x speed improvement, bringing down the time to run auto fr
 git clone https://github.com/loemraw/fast-fstests.git
 cd fast-fstests
 pip install -e .
-# or if you want to plots in output
+# or if you want plots in output
 pip install -e ".[plot]"
 fast-fstests --help
 ```
