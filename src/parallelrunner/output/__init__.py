@@ -168,9 +168,12 @@ class Output:
                         yield stdout, stderr
             else:
                 path = self._get_test_path(test)
+                latest = self._get_latest_path(test)
 
                 with open(path.joinpath("stdout"), "wb+") as stdout:
+                    self._link("stdout", path, latest)
                     with open(path.joinpath("stderr"), "wb+") as stderr:
+                        self._link("stderr", path, latest)
                         yield stdout, stderr
         finally:
             self._test_progress.remove_task(task_id)
@@ -186,6 +189,15 @@ class Output:
         path = self.results_dir.joinpath("latest", test.name)
         os.makedirs(path, exist_ok=True)
         return path
+    
+    def _link(self, filename: str, path: Path, destination: Path):
+        destination = destination.joinpath(filename)
+        if destination.is_file():
+            os.remove(destination)
+        os.symlink(
+            path.absolute().joinpath(filename),
+            destination.joinpath(filename),
+        )
 
     def _reset_latest(self):
         if self.results_dir is None:
@@ -216,26 +228,17 @@ class Output:
         path = self._get_test_path(test)
         latest = self._get_latest_path(test)
 
-        def link(filename: str):
-            os.symlink(
-                Path(path).absolute().joinpath(filename),
-                latest.joinpath(filename),
-            )
-
-        link("stdout")
-        link("stderr")
-
         with open(path.joinpath("retcode"), "w") as f:
             _ = f.write(str(result.retcode))
-        link("retcode")
+        self._link("retcode", path, latest)
 
         with open(path.joinpath("duration"), "w") as f:
             _ = f.write(str(result.duration))
-        link("duration")
+        self._link("duration", path, latest)
 
         with open(path.joinpath("status"), "w") as f:
             _ = f.write(str(result.status.name))
-        link("status")
+        self._link("status", path, latest)
 
         if result.artifacts:
             path = path.joinpath("artifacts")
@@ -246,7 +249,7 @@ class Output:
             for name, value in result.artifacts.items():
                 with open(path.joinpath(name), "wb") as f:
                     _ = f.write(value)
-                link(name)
+                self._link(name, path, latest)
 
     def _test_status_output(self, result: TestResult) -> str:
         match result.status:
@@ -475,6 +478,9 @@ class Output:
             return
 
         path = self._get_test_path(test)
+        latest = self._get_latest_path(test)
         with open(path.joinpath("bpftrace-stdout"), "wb+") as stdout:
+            self._link("bpftrace-stdout", path, latest)
             with open(path.joinpath("bpftrace-stderr"), "wb+") as stderr:
+                self._link("bpftrace-stderr", path, latest)
                 yield (stdout, stderr)
