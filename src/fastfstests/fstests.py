@@ -47,7 +47,11 @@ class FSTest(Test):
             case _:
                 status = TestStatus.FAIL
 
-        summary = " ".join(stdout.decode().splitlines()[7].split()[1:])
+        summary = (
+            " ".join(stdout.decode().splitlines()[7].split()[1:])
+            if status == TestStatus.SKIP
+            else None
+        )
         return TestResult(
             self.name,
             status,
