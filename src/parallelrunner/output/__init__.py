@@ -278,7 +278,7 @@ class Output:
             if path.is_file()
         ]
 
-        median = statistics.median(times)
+        median = statistics.median(times) if times else result.duration
         deviation = abs(result.duration - median)
         bounded_deviation = (
             min(float(self._print_test_regressions), deviation)
