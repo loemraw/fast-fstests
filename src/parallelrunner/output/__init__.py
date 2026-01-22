@@ -196,7 +196,7 @@ class Output:
             os.remove(destination)
         os.symlink(
             path.absolute().joinpath(filename),
-            destination.joinpath(filename),
+            destination,
         )
 
     def _reset_latest(self):
