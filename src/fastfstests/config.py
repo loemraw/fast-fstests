@@ -110,6 +110,12 @@ class MkosiOptions:
     ] = field(default_factory=list)
     """list of options to pass through to mkosi (e.g. "--profile=fast-fstests --build-sources=~/kernel:kernel")"""
 
+    include: Annotated[
+        Path | None,
+        arg(metavar="PATH", help_behavior_hint=hbh),
+    ] = None
+    """path to mkosi config to pass through to mkosi"""
+
     fstests: Annotated[Path | None, arg(metavar="PATH", help_behavior_hint=hbh)] = None
     """fstests dir path on mkosi vm"""
 

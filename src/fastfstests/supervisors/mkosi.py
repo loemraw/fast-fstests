@@ -49,6 +49,8 @@ class MkosiSupervisor(Supervisor):
             *self.config.mkosi.options,
             "qemu",
         ]
+        if self.config.mkosi.include is not None:
+            self.mkosi_command.insert(1, f"--include={self.config.mkosi.include}")
 
     def build(self, forces: int):
         build_command = list(self.mkosi_command)
