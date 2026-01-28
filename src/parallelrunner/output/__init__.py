@@ -242,9 +242,9 @@ class Output:
 
         if result.artifacts:
             path = path.joinpath("artifacts")
-            os.makedirs(path)
+            os.makedirs(path, exist_ok=True)
             latest = latest.joinpath("artifacts")
-            os.makedirs(latest)
+            os.makedirs(latest, exist_ok=True)
 
             for name, value in result.artifacts.items():
                 with open(path.joinpath(name), "wb") as f:
