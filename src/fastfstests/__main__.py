@@ -41,6 +41,8 @@ def main():
 
     logging.getLogger().handlers.clear()
     if config.output.results_dir:
+        os.makedirs(config.output.results_dir, exist_ok=True)
+
         if config.output.verbose:
             logging.getLogger().setLevel(logging.DEBUG)
         logging.getLogger().addHandler(
