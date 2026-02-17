@@ -198,6 +198,9 @@ class TestRunnerOptions:
     ] = None
     """path to bpftrace script on vm"""
 
+    probe_interval: Annotated[int, arg(metavar="SECONDS", help_behavior_hint=hbh)] = 30
+    """seconds between liveness probes to check if hosts are still sshable (0 to disable)"""
+
 
 @dataclass
 class Config:

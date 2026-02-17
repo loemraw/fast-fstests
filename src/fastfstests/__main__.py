@@ -73,6 +73,7 @@ def main():
             config.test_runner.keep_alive,
             config.test_runner.test_timeout,
             config.test_runner.bpftrace or config.test_runner.bpftrace_script,
+            config.test_runner.probe_interval,
         )
         asyncio.run(runner.run())
     except KeyboardInterrupt:

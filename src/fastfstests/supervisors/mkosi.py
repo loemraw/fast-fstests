@@ -169,6 +169,13 @@ class MkosiSupervisor(Supervisor):
     def exited(self) -> bool:
         return self._exited
 
+    @override
+    async def probe(self) -> bool:
+        if self.proc is None or self.proc.returncode is not None:
+            return False
+        retcode = await self.run_command("echo POKE", 5)
+        return retcode == 0
+
     async def start_command(
         self,
         command: str,
