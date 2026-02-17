@@ -7,6 +7,10 @@ from typing import IO, Self
 from .test import Test, TestResult
 
 
+class SupervisorExited(Exception):
+    pass
+
+
 class Supervisor(ABC):
     @abstractmethod
     async def __aenter__(self) -> Self:
@@ -44,4 +48,8 @@ class Supervisor(ABC):
     @property
     @abstractmethod
     def exited(self) -> bool:
+        pass
+
+    @abstractmethod
+    async def probe(self) -> bool:
         pass

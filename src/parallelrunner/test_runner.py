@@ -1,12 +1,15 @@
 import asyncio
+import logging
 import sys
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from .output import Output
-from .supervisor import Supervisor
+from .supervisor import Supervisor, SupervisorExited
 from .test import Test
+
+logger = logging.getLogger(__name__)
 
 
 class TestRunner:
@@ -18,12 +21,14 @@ class TestRunner:
         keep_alive: bool = False,
         test_timeout: int | None = None,
         bpftrace: str | Path | None = None,
+        probe_interval: int = 0,
     ):
         self.tests: list[Test] = list(tests)
         self.supervisors: list[Supervisor] = list(supervisors)
         self.output: Output = output
         self.keep_alive: bool = keep_alive
         self.test_timeout: int | None = test_timeout
+        self.probe_interval: int = probe_interval
 
         self.bpftrace_command: str | None
         match bpftrace:
@@ -50,6 +55,24 @@ class TestRunner:
             self.output.print_summary()
 
     async def __worker(self, supervisor: Supervisor):
+        if self.probe_interval > 0:
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    probe_task = tg.create_task(self.__probe_loop(supervisor))
+
+                    async def run_tests():
+                        try:
+                            await self.__run_tests_loop(supervisor)
+                        finally:
+                            _ = probe_task.cancel()
+
+                    _ = tg.create_task(run_tests())
+            except* SupervisorExited:
+                pass
+        else:
+            await self.__run_tests_loop(supervisor)
+
+    async def __run_tests_loop(self, supervisor: Supervisor):
         async def run_test(test: Test):
             with self.output.running_test(test) as (stdout, stderr):
                 result = await supervisor.run_test(
@@ -71,6 +94,25 @@ class TestRunner:
             test = self.tests.pop()
             async with bpftrace(test):
                 await run_test(test)
+
+    async def __probe_loop(self, supervisor: Supervisor):
+        while True:
+            await asyncio.sleep(self.probe_interval)
+
+            alive = False
+            for attempt in range(3):
+                if await supervisor.probe():
+                    alive = True
+                    break
+                logger.warning(
+                    "probe failed for %s (attempt %d/3)", supervisor, attempt + 1
+                )
+                if attempt < 2:
+                    await asyncio.sleep(1)
+
+            if not alive:
+                self.output.supervisor_died(supervisor)
+                raise SupervisorExited(repr(supervisor))
 
     @asynccontextmanager
     async def __parallel_supervisor_cm(self):

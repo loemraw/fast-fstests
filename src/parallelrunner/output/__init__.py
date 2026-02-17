@@ -484,3 +484,6 @@ class Output:
             with open(path.joinpath("bpftrace-stderr"), "wb+") as stderr:
                 self._link("bpftrace-stderr", path, latest)
                 yield (stdout, stderr)
+
+    def supervisor_died(self, supervisor: Supervisor):
+        self.console.print(f"  [bold red]dead[/bold red] {supervisor}")
