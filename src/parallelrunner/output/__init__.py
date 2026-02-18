@@ -227,7 +227,7 @@ class Output:
         if latest_link.is_symlink():
             latest_link.unlink()
         os.makedirs(latest_link.parent, exist_ok=True)
-        os.symlink(os.path.relpath(test_path, latest_link.parent), latest_link)
+        os.symlink(test_path.absolute(), latest_link)
 
     def _reset_latest(self):
         if self.results_dir is None:
@@ -413,7 +413,7 @@ class Output:
             if link.is_symlink():
                 link.unlink()
             os.makedirs(link.parent, exist_ok=True)
-            os.symlink(os.path.relpath(test_path, link.parent), link)
+            os.symlink(test_path.absolute(), link)
         self.console.print(f"  [dim]Recording saved: {label}")
 
     # --- Misc ---
