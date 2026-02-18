@@ -66,6 +66,9 @@ fast-fstests --help
 | `test_timeout` | int | `--test-timeout` | Max seconds to run a test. |
 | `bpftrace` | str | `--bpftrace` | BPFTrace script to be executed with -e |
 | `bpftrace_script` | Path | `--bpftrace-script` | BPFTrace script path that will be executed on vm |
+| `probe_interval` | int | `--probe-interval` | Seconds between liveness probes (0 to disable). Default: 30. |
+| `max_supervisor_restarts` | int | `--max-supervisor-restarts` | Max times a test can kill a supervisor before being marked as error. Default: 3. |
+| `dmesg` | bool | `--dmesg`, `--no-dmesg` | Stream dmesg output during test execution. Default: true. |
 
 ### `[mkosi]` Section
 
