@@ -62,7 +62,7 @@ GROUP_LIST = """\
 def test_make_result_pass():
     config = make_config(Path("/fstests"))
     test = FSTest("btrfs/001", config)
-    result = test.make_result(1.5, 0, b"output", b"", {})
+    result = test.make_result(1.5, 0, b"output", b"")
 
     assert result.status == TestStatus.PASS
     assert result.name == "btrfs/001"
@@ -72,7 +72,7 @@ def test_make_result_pass():
 def test_make_result_fail():
     config = make_config(Path("/fstests"))
     test = FSTest("btrfs/001", config)
-    result = test.make_result(1.5, 1, b"output", b"error", {})
+    result = test.make_result(1.5, 1, b"output", b"error")
 
     assert result.status == TestStatus.FAIL
 
@@ -86,7 +86,7 @@ def test_make_result_skip():
     stdout = "\n".join(lines).encode()
     stdout = stdout.replace(b"line 3", b"[not run]")
 
-    result = test.make_result(1.5, 0, stdout, b"", {})
+    result = test.make_result(1.5, 0, stdout, b"")
 
     assert result.status == TestStatus.SKIP
     assert result.summary == "needs ext4 filesystem support"

@@ -1,9 +1,11 @@
 import asyncio
 import logging
 import random
+import shlex
 import shutil
 import string
 import subprocess
+import tarfile
 import tempfile
 import time
 from asyncio.subprocess import DEVNULL, PIPE, Process
@@ -135,7 +137,6 @@ class MkosiSupervisor(Supervisor):
             retcode,
             out,
             err,
-            await self.collect_artifacts(test),
         )
 
     @asynccontextmanager
@@ -250,40 +251,22 @@ class MkosiSupervisor(Supervisor):
                 return
             await asyncio.sleep(1)
 
-    async def collect_artifacts(self, test: Test) -> dict[str, bytes]:
+    @override
+    async def collect_artifacts(self, test: Test, dest: Path):
+        if not test.artifact_paths:
+            return
         logger.debug(f"collecting artifacts for test {test}")
-
-        async def collect_artifact(path: Path) -> tuple[str, bytes] | None:
-            with tempfile.TemporaryFile("wb+") as f:
-                retcode = await self.run_command(f"cat {str(path)}", 5, stdout=f)
-                _ = f.seek(0)
-                out = f.read()
-            if retcode is None:
+        paths = " ".join(shlex.quote(str(p)) for p in test.artifact_paths)
+        with tempfile.TemporaryFile("wb+") as f:
+            retcode = await self.run_command(
+                f"tar -cf - {paths} 2>/dev/null", 10, stdout=f
+            )
+            if retcode is None or retcode != 0:
                 return
-            logger.debug(f"collected artifact for {path.name}: %s", out)
-            return path.name, out
-
-        async def collect_artifacts(path: Path) -> list[tuple[str, bytes]]:
-            with tempfile.TemporaryFile("wb+") as f:
-                retcode = await self.run_command(f"ls {str(path)}", 5, stdout=f)
-                _ = f.seek(0)
-                out = f.read()
-            if retcode is None:
-                return []
-            paths = [Path(p.decode()) for p in out.splitlines()]
-            logger.debug("collecting artifacts for paths %s...", paths)
-            return [
-                t
-                for t in await asyncio.gather(*[collect_artifact(p) for p in paths])
-                if t is not None
-            ]
-
-        return dict(
-            [
-                i
-                for l in await asyncio.gather(
-                    *[collect_artifacts(path) for path in test.artifact_paths]
-                )
-                for i in l
-            ]
-        )
+            _ = f.seek(0)
+            with tarfile.open(fileobj=f) as tar:
+                for member in tar.getmembers():
+                    if member.isfile():
+                        data = tar.extractfile(member)
+                        if data:
+                            _ = (dest / Path(member.name).name).write_bytes(data.read())

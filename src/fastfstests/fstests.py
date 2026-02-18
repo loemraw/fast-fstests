@@ -35,7 +35,6 @@ class FSTest(Test):
         retcode: int,
         stdout: bytes,
         stderr: bytes,
-        artifacts: dict[str, bytes],
     ) -> TestResult:
         match retcode:
             case 0:
@@ -60,7 +59,6 @@ class FSTest(Test):
             retcode,
             stdout,
             stderr,
-            artifacts,
         )
 
 
