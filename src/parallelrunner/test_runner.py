@@ -3,11 +3,12 @@ import logging
 import sys
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from .output import Output
 from .supervisor import Supervisor, SupervisorExited
-from .test import Test
+from .test import Test, TestResult
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class TestRunner:
         test_timeout: int | None = None,
         bpftrace: str | Path | None = None,
         probe_interval: int = 0,
+        max_supervisor_restarts: int = 3,
     ):
         self.tests: list[Test] = list(tests)
         self.supervisors: list[Supervisor] = list(supervisors)
@@ -29,6 +31,9 @@ class TestRunner:
         self.keep_alive: bool = keep_alive
         self.test_timeout: int | None = test_timeout
         self.probe_interval: int = probe_interval
+        self.max_supervisor_restarts: int = max_supervisor_restarts
+
+        self._death_counts: dict[str, int] = {}
 
         self.bpftrace_command: str | None
         match bpftrace:
@@ -41,59 +46,120 @@ class TestRunner:
 
     async def run(self):
         try:
-            await self._spawn_supervisors()
-            try:
-                with self.output.running_tests(len(self.tests)):
-                    async with asyncio.TaskGroup() as tg:
-                        for supervisor in self.supervisors:
-                            _ = tg.create_task(self._worker(supervisor))
+            with self.output.running_tests(len(self.tests)):
+                async with asyncio.TaskGroup() as tg:
+                    for supervisor in self.supervisors:
+                        _ = tg.create_task(self._worker(supervisor))
 
-                if self.keep_alive:
-                    with self.output.keeping_alive():
-                        while True:
-                            await asyncio.sleep(1)
-            finally:
-                await self._cleanup_supervisors()
+            if self.keep_alive:
+                with self.output.keeping_alive():
+                    while True:
+                        await asyncio.sleep(1)
         finally:
+            # Safety net: clean up any supervisors still running (keep_alive path)
+            for supervisor in self.supervisors:
+                if not supervisor.exited:
+                    await supervisor.__aexit__(*sys.exc_info())
             self.output.print_summary()
 
     # --- Worker ---
 
     async def _worker(self, supervisor: Supervisor):
         try:
-            if self.probe_interval > 0:
-                await self._worker_with_probe(supervisor)
-            else:
-                await self._run_tests_loop(supervisor)
-        except OSError:
-            logger.exception("worker for %r crashed", supervisor)
-            self.output.supervisor_died(supervisor)
+            with self.output.spawning_supervisor(supervisor):
+                _ = await supervisor.__aenter__()
+        except (TimeoutError, RuntimeError, OSError):
+            logger.exception("supervisor %r failed to spawn", supervisor)
+            return
 
-    async def _worker_with_probe(self, supervisor: Supervisor):
         try:
-            async with asyncio.TaskGroup() as tg:
-                probe_task = tg.create_task(self._probe_loop(supervisor))
-                _ = tg.create_task(
-                    self._run_tests_then_cancel(supervisor, probe_task)
-                )
-        except* SupervisorExited:
-            pass
+            if self.probe_interval <= 0:
+                try:
+                    await self._run_tests_loop(supervisor)
+                except OSError:
+                    logger.exception("worker for %r crashed", supervisor)
+                    self.output.supervisor_died(supervisor)
+                return
+
+            # Probing + restart loop
+            while True:
+                current_test: list[Test | None] = [None]
+                died = False
+                try:
+                    async with asyncio.TaskGroup() as tg:
+                        probe_task = tg.create_task(self._probe_loop(supervisor))
+                        _ = tg.create_task(
+                            self._run_tests_then_cancel(
+                                supervisor, probe_task, current_test
+                            )
+                        )
+                except* (SupervisorExited, OSError):
+                    died = True
+                    test = current_test[0]
+                    self.output.supervisor_died(
+                        supervisor, test.name if test is not None else None
+                    )
+
+                    if test is not None:
+                        count = self._death_counts.get(test.name, 0) + 1
+                        self._death_counts[test.name] = count
+                        if count >= self.max_supervisor_restarts:
+                            self.output.finished_test(
+                                test,
+                                TestResult.from_error(
+                                    test.name,
+                                    f"killed supervisor {count} times",
+                                    0.0,
+                                    datetime.now(),
+                                ),
+                            )
+                        else:
+                            self.tests.append(test)
+
+                if not died:
+                    return  # Normal completion
+
+                if not self.tests:
+                    return
+
+                try:
+                    with self.output.respawning_supervisor(supervisor):
+                        await supervisor.__aexit__(None, None, None)
+                        _ = await supervisor.__aenter__()
+                except Exception:
+                    logger.exception("failed to restart %s", supervisor)
+                    return
+        finally:
+            if not self.keep_alive:
+                await supervisor.__aexit__(None, None, None)
+                self.output.exited_supervisor(supervisor)
 
     async def _run_tests_then_cancel(
-        self, supervisor: Supervisor, probe_task: asyncio.Task[None]
+        self,
+        supervisor: Supervisor,
+        probe_task: asyncio.Task[None],
+        current_test: list[Test | None],
     ):
         try:
-            await self._run_tests_loop(supervisor)
+            await self._run_tests_loop(supervisor, current_test)
         finally:
             _ = probe_task.cancel()
 
     # --- Test execution ---
 
-    async def _run_tests_loop(self, supervisor: Supervisor):
+    async def _run_tests_loop(
+        self,
+        supervisor: Supervisor,
+        current_test: list[Test | None] | None = None,
+    ):
         while self.tests:
             test = self.tests.pop()
+            if current_test is not None:
+                current_test[0] = test
             async with self._bpftrace(supervisor, test):
                 await self._run_test(supervisor, test)
+            if current_test is not None:
+                current_test[0] = None
 
     async def _run_test(self, supervisor: Supervisor, test: Test):
         with self.output.running_test(test) as (stdout, stderr):
@@ -130,34 +196,4 @@ class TestRunner:
                     await asyncio.sleep(1)
 
             if not alive:
-                self.output.supervisor_died(supervisor)
                 raise SupervisorExited(repr(supervisor))
-
-    # --- Supervisor lifecycle ---
-
-    async def _spawn_supervisors(self):
-        async def spawn(supervisor: Supervisor):
-            with self.output.spawning_supervisor(supervisor):
-                return await supervisor.__aenter__()
-
-        with self.output.spawning_supervisors(len(self.supervisors)):
-            try:
-                async with asyncio.TaskGroup() as tg:
-                    for supervisor in self.supervisors:
-                        _ = tg.create_task(spawn(supervisor))
-            except* (TimeoutError, RuntimeError, OSError) as eg:
-                for exc in eg.exceptions:
-                    logger.error("supervisor spawn failed: %s", exc)
-                self.supervisors = [s for s in self.supervisors if not s.exited]
-
-        if not self.supervisors:
-            raise RuntimeError("all supervisors failed to spawn")
-
-    async def _cleanup_supervisors(self):
-        async def cleanup(supervisor: Supervisor):
-            with self.output.cleaning_supervisor(supervisor):
-                await supervisor.__aexit__(*sys.exc_info())
-
-        with self.output.cleaning_supervisors(len(self.supervisors)):
-            for supervisor in self.supervisors:
-                await cleanup(supervisor)

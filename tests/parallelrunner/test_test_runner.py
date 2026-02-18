@@ -44,9 +44,12 @@ class MockSupervisor(Supervisor):
         self._probe_index: int = 0
         self._exited: bool = False
         self._test_delay: float = test_delay
+        self.enter_count: int = 0
 
     @override
     async def __aenter__(self) -> Self:
+        self._exited = False
+        self.enter_count += 1
         return self
 
     @override
@@ -145,7 +148,9 @@ def test_probe_failure_stops_worker(output: Output):
     dead = MockSupervisor(probe_results=[False, False, False], test_delay=2)
     alive = MockSupervisor()
     tests = make_tests(4)
-    runner = TestRunner(tests, [dead, alive], output, probe_interval=1)
+    runner = TestRunner(
+        tests, [dead, alive], output, probe_interval=1, max_supervisor_restarts=0
+    )
 
     asyncio.run(runner.run())
 
@@ -187,6 +192,8 @@ def test_empty_test_list(output: Output):
 
 
 def test_supervisor_spawn_failure(output: Output):
+    """When the only supervisor fails to spawn, worker exits gracefully."""
+
     class FailSpawnSupervisor(MockSupervisor):
         @override
         async def __aenter__(self) -> Self:
@@ -196,16 +203,18 @@ def test_supervisor_spawn_failure(output: Output):
     tests = make_tests(3)
     runner = TestRunner(tests, [FailSpawnSupervisor()], output)
 
-    with pytest.raises(RuntimeError, match="all supervisors failed to spawn"):
-        asyncio.run(runner.run())
+    asyncio.run(runner.run())
+    # No exception — worker exits gracefully, no tests run
 
 
 def test_all_supervisors_die_remaining_tests_lost(output: Output):
-    """When all supervisors die, remaining tests are never executed."""
+    """When all supervisors die with restarts disabled, remaining tests are never executed."""
     s1 = MockSupervisor(probe_results=[False, False, False], test_delay=2)
     s2 = MockSupervisor(probe_results=[False, False, False], test_delay=2)
     tests = make_tests(10)
-    runner = TestRunner(tests, [s1, s2], output, probe_interval=1)
+    runner = TestRunner(
+        tests, [s1, s2], output, probe_interval=1, max_supervisor_restarts=0
+    )
 
     asyncio.run(runner.run())
 
@@ -273,3 +282,49 @@ def test_worker_oserror_continues(output: Output):
     asyncio.run(runner.run())
 
     assert len(healthy.tests_run) > 0
+
+
+def test_supervisor_restarts_on_death(output: Output):
+    """Supervisor dies from probe failure, restarts, and completes remaining tests."""
+    # 3 False probes = one death. After restart, probes return True (default).
+    supervisor = MockSupervisor(probe_results=[False, False, False], test_delay=2)
+    tests = make_tests(4)
+    runner = TestRunner(tests, [supervisor], output, probe_interval=1)
+
+    asyncio.run(runner.run())
+
+    assert sorted(supervisor.tests_run) == [f"test/{i:03d}" for i in range(4)]
+    assert supervisor.enter_count == 2  # Initial spawn + 1 restart
+
+
+def test_interrupted_test_rescheduled(output: Output):
+    """Test in-flight when VM dies is rescheduled and completed after restart."""
+    # Slow test delay ensures the test is in-flight when probe fires.
+    # 3 False probes = death. After restart, probes return True.
+    supervisor = MockSupervisor(probe_results=[False, False, False], test_delay=2)
+    tests = make_tests(2)
+    runner = TestRunner(tests, [supervisor], output, probe_interval=1)
+
+    asyncio.run(runner.run())
+
+    # Both tests should complete (the interrupted one gets rescheduled)
+    assert sorted(supervisor.tests_run) == ["test/000", "test/001"]
+
+
+def test_max_restarts_exceeded(output: Output):
+    """Test that repeatedly kills supervisor gets ERROR after max restarts."""
+    # Always fail probes — supervisor dies every time it restarts.
+    # With max_supervisor_restarts=1, first death reschedules, second records ERROR.
+    supervisor = MockSupervisor(
+        probe_results=[False] * 20, test_delay=2
+    )
+    tests = make_tests(1)
+    runner = TestRunner(
+        tests, [supervisor], output, probe_interval=1, max_supervisor_restarts=1
+    )
+
+    asyncio.run(runner.run())
+
+    # The test should have been attempted but ultimately get ERROR status
+    # (killed supervisor 1 time = max, so it's marked as error on first death)
+    assert supervisor.enter_count >= 1

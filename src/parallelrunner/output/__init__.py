@@ -57,39 +57,11 @@ class Output:
         self._results: list[TestResult] = []
         self._duration: int = 0
 
-        supervisor_progress = self._create_supervisor_progress()
-        self._supervisor_live: Live = supervisor_progress[0]
-        self._supervisor_progress: Progress = supervisor_progress[1]
-        self._supervisors_progress: Progress = supervisor_progress[2]
-        self._supervisor_task_id: TaskID = supervisor_progress[3]
-
         test_progress = self._create_test_progress()
         self._test_live: Live = test_progress[0]
         self._test_progress: Progress = test_progress[1]
         self._overall_test_progress: Progress = test_progress[2]
         self._overall_test_task_id: TaskID = test_progress[3]
-
-    def _create_supervisor_progress(
-        self,
-    ) -> tuple[Live, Progress, Progress, TaskID]:
-        overall = Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(complete_style="green", finished_style="green"),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TextColumn("({task.completed}/{task.total})"),
-            TimeElapsedColumn(),
-            console=self.console,
-        )
-        task_id = overall.add_task("Spawning supervisors...")
-        individual = Progress(
-            SpinnerColumn(),
-            TextColumn("{task.description}"),
-            TimeElapsedColumn(),
-            console=self.console,
-        )
-        live = Live(Group(individual, overall), console=self.console)
-        return live, individual, overall, task_id
 
     def _create_test_progress(self) -> tuple[Live, Progress, Progress, TaskID]:
         overall = Progress(
@@ -114,18 +86,8 @@ class Output:
     # --- Supervisor lifecycle ---
 
     @contextmanager
-    def spawning_supervisors(self, num_supervisors: int):
-        self.console.print()
-        self.console.print(Rule(title=" Setting up", align="left"))
-        self._supervisors_progress.reset(
-            self._supervisor_task_id, total=num_supervisors
-        )
-        with self._supervisor_live:
-            yield self
-
-    @contextmanager
     def spawning_supervisor(self, supervisor: Supervisor):
-        task_id = self._supervisor_progress.add_task(repr(supervisor))
+        task_id = self._test_progress.add_task(f"spawning {supervisor!r}")
         failed = False
         try:
             yield
@@ -133,39 +95,29 @@ class Output:
             failed = True
             raise
         finally:
-            self._supervisor_progress.remove_task(task_id)
-            self._supervisors_progress.advance(self._supervisor_task_id)
+            self._test_progress.remove_task(task_id)
             if failed:
                 self.console.print(f"  [bold red]failed[/bold red] {supervisor}")
-            elif supervisor.exited:
-                self.console.print(f"  [bold green]exit[/bold green] {supervisor}")
             else:
                 self.console.print(f"  [bold green]spawn[/bold green] {supervisor}")
 
     @contextmanager
-    def cleaning_supervisors(self, num_supervisors: int):
-        self.console.print()
-        self.console.print(Rule(title=" Cleaning up", align="left"))
-        self._supervisors_progress.reset(
-            self._supervisor_task_id,
-            description="Exiting supervisors...",
-            total=num_supervisors,
-        )
-        with self._supervisor_live:
-            yield self
-
-    @contextmanager
-    def cleaning_supervisor(self, supervisor: Supervisor):
-        task_id = self._supervisor_progress.add_task(repr(supervisor))
+    def respawning_supervisor(self, supervisor: Supervisor):
+        task_id = self._test_progress.add_task(f"respawning {supervisor!r}")
         try:
             yield
         finally:
-            self._supervisor_progress.remove_task(task_id)
-            self._supervisors_progress.advance(self._supervisor_task_id)
-            self.console.print(f"  [bold green]exit[/bold green] {supervisor}")
+            self._test_progress.remove_task(task_id)
+            self.console.print(f"  [bold green]respawn[/bold green] {supervisor}")
 
-    def supervisor_died(self, supervisor: Supervisor):
-        self.console.print(f"  [bold red]dead[/bold red] {supervisor}")
+    def exited_supervisor(self, supervisor: Supervisor):
+        self.console.print(f"  [bold green]exit[/bold green] {supervisor}")
+
+    def supervisor_died(self, supervisor: Supervisor, test_name: str | None = None):
+        msg = f"  [bold red]dead[/bold red] {supervisor}"
+        if test_name is not None:
+            msg += f" [dim](was running {test_name})"
+        self.console.print(msg)
 
     # --- Test execution ---
 
