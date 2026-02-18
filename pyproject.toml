@@ -32,3 +32,6 @@ packages = ["src/fastfstests", "src/parallelrunner"]
 dev = [
     "pytest>=8.4.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
