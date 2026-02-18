@@ -301,12 +301,13 @@ class Output:
     def _print_result(self, test: Test, result: TestResult):
         logger.debug("summary for test %s: %s", test, result.summary)
         style, _ = _STATUS_STYLES[result.status]
-        duration = f"[yellow]{timedelta(seconds=int(result.duration))}"
-        parts = [
+        parts: list[str] = [
             f"  [bold {style}]{result.status.name.lower()}[/bold {style}]",
             result.name,
-            duration,
         ]
+
+        if result.status != TestStatus.ERROR:
+            parts.append(f"[yellow]{timedelta(seconds=int(result.duration))}")
 
         if self._diff:
             parts.append(self._format_diff(result))
