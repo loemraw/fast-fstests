@@ -82,6 +82,7 @@ def run(config: RunConfig):
         print_failure_list=config.output.print_failure_list,
         print_n_slowest=config.output.print_n_slowest,
         print_duration_hist=config.output.print_duration_hist,
+        recording_label=config.output.record,
     )
 
     logging.getLogger().handlers.clear()
@@ -126,9 +127,6 @@ def run(config: RunConfig):
             config.test_runner.dmesg,
         )
         asyncio.run(runner.run())
-
-        if config.output.record is not None:
-            output.save_recording(config.output.record)
     except KeyboardInterrupt:
         pass
     except Exception as e:

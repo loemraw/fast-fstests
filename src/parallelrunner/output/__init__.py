@@ -45,6 +45,7 @@ class Output:
         print_failure_list: bool = False,
         print_n_slowest: int = 0,
         print_duration_hist: bool = False,
+        recording_label: str | None = None,
     ):
         self.console: Console = Console(highlight=False)
         self.results_dir: Path | None = results_dir
@@ -52,6 +53,7 @@ class Output:
         self._print_failure_list: bool = print_failure_list
         self._print_n_slowest: int = print_n_slowest
         self._print_duration_hist: bool = print_duration_hist
+        self._recording_label: str | None = recording_label
 
         self._results: list[TestResult] = []
         self._retries: dict[str, int] = {}
@@ -146,6 +148,7 @@ class Output:
     @contextmanager
     def running_tests(self, num_tests: int):
         self._reset_latest()
+        self._reset_recording()
 
         self.console.print()
         self.console.print(Rule(title=" Testing", align="left"))
@@ -185,6 +188,7 @@ class Output:
         self._overall_test_progress.advance(self._overall_test_task_id)
         self._print_result(test, result)
         self._save_result(test, result)
+        self._link_recording(result)
 
     def record_retry(self, test: Test, result: TestResult):
         self._retries[test.name] = self._retries.get(test.name, 0) + 1
@@ -400,15 +404,19 @@ class Output:
 
     # --- Recordings ---
 
-    def save_recording(self, label: str):
-        if self.results_dir is None:
+    def _reset_recording(self):
+        if self.results_dir is None or self._recording_label is None:
             return
-        rec_dir = self.results_dir / "recordings" / label
-        os.makedirs(rec_dir, exist_ok=True)
-        for result in self._results:
-            test_path = self.results_dir / "tests" / result.name / result.test_id
-            self._symlink_dir(test_path, rec_dir / result.name)
-        self.console.print(f"  [dim]Recording saved: {label}")
+        rec_dir = self.results_dir / "recordings" / self._recording_label
+        if rec_dir.exists():
+            shutil.rmtree(rec_dir)
+
+    def _link_recording(self, result: TestResult):
+        if self.results_dir is None or self._recording_label is None:
+            return
+        rec_dir = self.results_dir / "recordings" / self._recording_label
+        test_path = self.results_dir / "tests" / result.name / result.test_id
+        self._symlink_dir(test_path, rec_dir / result.name)
 
     # --- Misc ---
 
