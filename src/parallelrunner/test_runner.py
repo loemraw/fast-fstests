@@ -169,6 +169,10 @@ class TestRunner:
             result = await supervisor.run_test(
                 test, self.test_timeout, stdout, stderr
             )
+        artifact_path = self.output.get_artifact_path(test)
+        if artifact_path is not None:
+            await supervisor.collect_artifacts(test, artifact_path)
+            self.output.link_artifacts(test)
         self.output.finished_test(test, result)
 
     @asynccontextmanager

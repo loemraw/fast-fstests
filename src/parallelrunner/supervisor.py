@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import TracebackType
 from typing import IO, Self
 
@@ -33,6 +34,10 @@ class Supervisor(ABC):
         stdout: IO[bytes],
         stderr: IO[bytes],
     ) -> TestResult:
+        pass
+
+    @abstractmethod
+    async def collect_artifacts(self, test: Test, dest: Path):
         pass
 
     @asynccontextmanager

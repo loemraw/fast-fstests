@@ -219,6 +219,24 @@ class Output:
         if path.exists():
             shutil.rmtree(path)
 
+    def get_artifact_path(self, test: Test) -> Path | None:
+        if self.results_dir is None:
+            return None
+        path = self._get_test_path(test) / "artifacts"
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def link_artifacts(self, test: Test):
+        if self.results_dir is None:
+            return
+        path = self._get_test_path(test) / "artifacts"
+        if not path.exists():
+            return
+        latest = self._get_latest_path(test) / "artifacts"
+        os.makedirs(latest, exist_ok=True)
+        for name in os.listdir(path):
+            self._link(name, path, latest)
+
     def _save_result(self, test: Test, result: TestResult):
         if self.results_dir is None:
             return
@@ -233,16 +251,6 @@ class Output:
         ]:
             _ = path.joinpath(name).write_text(value)
             self._link(name, path, latest)
-
-        if result.artifacts:
-            artifact_path = path / "artifacts"
-            artifact_latest = latest / "artifacts"
-            os.makedirs(artifact_path, exist_ok=True)
-            os.makedirs(artifact_latest, exist_ok=True)
-
-            for name, value in result.artifacts.items():
-                _ = artifact_path.joinpath(name).write_bytes(value)
-                self._link(name, artifact_path, artifact_latest)
 
     # --- Console output ---
 

@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from types import TracebackType
 from typing import IO, Self, override
 
@@ -21,7 +22,6 @@ class MockTest(Test):
         retcode: int,
         stdout: bytes,
         stderr: bytes,
-        artifacts: dict[str, bytes],
     ) -> TestResult:
         return TestResult(
             self.name,
@@ -32,7 +32,6 @@ class MockTest(Test):
             retcode,
             stdout,
             stderr,
-            artifacts,
         )
 
 
@@ -72,7 +71,11 @@ class MockSupervisor(Supervisor):
         if self._test_delay > 0:
             await asyncio.sleep(self._test_delay)
         self.tests_run.append(test.name)
-        return test.make_result(0.1, 0, b"", b"", {})
+        return test.make_result(0.1, 0, b"", b"")
+
+    @override
+    async def collect_artifacts(self, test: Test, dest: Path):
+        pass
 
     @asynccontextmanager
     @override

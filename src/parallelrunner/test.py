@@ -22,14 +22,13 @@ class TestResult:
     retcode: int | None
     stdout: bytes | None
     stderr: bytes | None
-    artifacts: dict[str, bytes]
 
     @staticmethod
     def from_error(
         name: str, summary: str, duration: float, timestamp: datetime
     ) -> "TestResult":
         return TestResult(
-            name, TestStatus.ERROR, duration, timestamp, summary, None, None, None, {}
+            name, TestStatus.ERROR, duration, timestamp, summary, None, None, None
         )
 
 
@@ -53,6 +52,5 @@ class Test(ABC):
         retcode: int,
         stdout: bytes,
         stderr: bytes,
-        artifacts: dict[str, bytes],
     ) -> TestResult:
         pass

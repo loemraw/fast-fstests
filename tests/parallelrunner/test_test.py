@@ -13,7 +13,6 @@ def test_from_error():
     assert result.retcode is None
     assert result.stdout is None
     assert result.stderr is None
-    assert result.artifacts == {}
 
 
 def test_status_enum_values():
