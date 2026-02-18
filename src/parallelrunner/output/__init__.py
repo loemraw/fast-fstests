@@ -313,7 +313,7 @@ class Output:
             parts.append(self._format_diff(result))
 
         if result.summary:
-            parts.append(f"[dim]{result.summary}")
+            parts.append(f" [dim]{result.summary}")
 
         self._live_print(*parts)
 
