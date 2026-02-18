@@ -41,65 +41,80 @@ class TestRunner:
 
     async def run(self):
         try:
-            async with self.__parallel_supervisor_cm():
+            await self._spawn_supervisors()
+            try:
                 with self.output.running_tests(len(self.tests)):
                     async with asyncio.TaskGroup() as tg:
                         for supervisor in self.supervisors:
-                            _ = tg.create_task(self.__worker(supervisor))
+                            _ = tg.create_task(self._worker(supervisor))
 
                 if self.keep_alive:
                     with self.output.keeping_alive():
                         while True:
                             await asyncio.sleep(1)
+            finally:
+                await self._cleanup_supervisors()
         finally:
             self.output.print_summary()
 
-    async def __worker(self, supervisor: Supervisor):
+    # --- Worker ---
+
+    async def _worker(self, supervisor: Supervisor):
         try:
             if self.probe_interval > 0:
-                try:
-                    async with asyncio.TaskGroup() as tg:
-                        probe_task = tg.create_task(self.__probe_loop(supervisor))
-
-                        async def run_tests():
-                            try:
-                                await self.__run_tests_loop(supervisor)
-                            finally:
-                                _ = probe_task.cancel()
-
-                        _ = tg.create_task(run_tests())
-                except* SupervisorExited:
-                    pass
+                await self._worker_with_probe(supervisor)
             else:
-                await self.__run_tests_loop(supervisor)
+                await self._run_tests_loop(supervisor)
         except OSError:
             logger.exception("worker for %r crashed", supervisor)
             self.output.supervisor_died(supervisor)
 
-    async def __run_tests_loop(self, supervisor: Supervisor):
-        async def run_test(test: Test):
-            with self.output.running_test(test) as (stdout, stderr):
-                result = await supervisor.run_test(
-                    test, self.test_timeout, stdout, stderr
+    async def _worker_with_probe(self, supervisor: Supervisor):
+        try:
+            async with asyncio.TaskGroup() as tg:
+                probe_task = tg.create_task(self._probe_loop(supervisor))
+                _ = tg.create_task(
+                    self._run_tests_then_cancel(supervisor, probe_task)
                 )
-            self.output.finished_test(test, result)
+        except* SupervisorExited:
+            pass
 
-        @asynccontextmanager
-        async def bpftrace(test: Test):
-            if self.bpftrace_command is None:
-                yield
-                return
+    async def _run_tests_then_cancel(
+        self, supervisor: Supervisor, probe_task: asyncio.Task[None]
+    ):
+        try:
+            await self._run_tests_loop(supervisor)
+        finally:
+            _ = probe_task.cancel()
 
-            with self.output.log_bpftrace(test) as (stdout, stderr):
-                async with supervisor.trace(self.bpftrace_command, stdout, stderr):
-                    yield
+    # --- Test execution ---
 
+    async def _run_tests_loop(self, supervisor: Supervisor):
         while self.tests:
             test = self.tests.pop()
-            async with bpftrace(test):
-                await run_test(test)
+            async with self._bpftrace(supervisor, test):
+                await self._run_test(supervisor, test)
 
-    async def __probe_loop(self, supervisor: Supervisor):
+    async def _run_test(self, supervisor: Supervisor, test: Test):
+        with self.output.running_test(test) as (stdout, stderr):
+            result = await supervisor.run_test(
+                test, self.test_timeout, stdout, stderr
+            )
+        self.output.finished_test(test, result)
+
+    @asynccontextmanager
+    async def _bpftrace(self, supervisor: Supervisor, test: Test):
+        if self.bpftrace_command is None:
+            yield
+            return
+
+        with self.output.log_bpftrace(test) as (stdout, stderr):
+            async with supervisor.trace(self.bpftrace_command, stdout, stderr):
+                yield
+
+    # --- Probe ---
+
+    async def _probe_loop(self, supervisor: Supervisor):
         while True:
             await asyncio.sleep(self.probe_interval)
 
@@ -118,17 +133,10 @@ class TestRunner:
                 self.output.supervisor_died(supervisor)
                 raise SupervisorExited(repr(supervisor))
 
-    @asynccontextmanager
-    async def __parallel_supervisor_cm(self):
-        await self.__spawn_supervisors()
+    # --- Supervisor lifecycle ---
 
-        try:
-            yield
-        finally:
-            await self.__cleanup_supervisors()
-
-    async def __spawn_supervisors(self):
-        async def spawn_supervisor(supervisor: Supervisor):
+    async def _spawn_supervisors(self):
+        async def spawn(supervisor: Supervisor):
             with self.output.spawning_supervisor(supervisor):
                 return await supervisor.__aenter__()
 
@@ -136,7 +144,7 @@ class TestRunner:
             try:
                 async with asyncio.TaskGroup() as tg:
                     for supervisor in self.supervisors:
-                        _ = tg.create_task(spawn_supervisor(supervisor))
+                        _ = tg.create_task(spawn(supervisor))
             except* (TimeoutError, RuntimeError, OSError) as eg:
                 for exc in eg.exceptions:
                     logger.error("supervisor spawn failed: %s", exc)
@@ -145,11 +153,11 @@ class TestRunner:
         if not self.supervisors:
             raise RuntimeError("all supervisors failed to spawn")
 
-    async def __cleanup_supervisors(self):
-        async def supervisor_exit(supervisor: Supervisor):
+    async def _cleanup_supervisors(self):
+        async def cleanup(supervisor: Supervisor):
             with self.output.cleaning_supervisor(supervisor):
                 await supervisor.__aexit__(*sys.exc_info())
 
         with self.output.cleaning_supervisors(len(self.supervisors)):
             for supervisor in self.supervisors:
-                await supervisor_exit(supervisor)
+                await cleanup(supervisor)
