@@ -239,11 +239,11 @@ class RunConfig:
 class CompareConfig:
     """compare two recorded runs"""
 
-    a: Annotated[str, Positional]
-    """first recording label"""
+    a: int | str = -2
+    """recording label or negative index (-1 = most recent)"""
 
-    b: Annotated[str, Positional]
-    """second recording label"""
+    b: int | str = -1
+    """recording label or negative index (-1 = most recent)"""
 
     results_dir: Annotated[Path, arg(metavar="PATH")] = Path("results")
     """path to results directory"""

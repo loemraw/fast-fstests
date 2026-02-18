@@ -109,7 +109,13 @@ fast-fstests --record after-fix -n 5 -g btrfs/auto
 
 Compare any two recordings:
 ```bash
-fast-fstests compare before-fix after-fix
+fast-fstests compare --a before-fix --b after-fix
+```
+
+Or use negative indices to reference recent recordings (-1 = most recent, -2 = second most recent):
+```bash
+# Compare the two most recent recordings (default)
+fast-fstests compare
 ```
 
 Recordings are stored as directory symlinks in `results/recordings/{label}/` and are never deleted.

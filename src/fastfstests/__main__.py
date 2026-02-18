@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import tomllib
+from pathlib import Path
 
 import tyro
 from mashumaro.codecs.toml import toml_decode
@@ -105,25 +106,49 @@ def run(config: RunConfig):
         sys.exit(1)
 
 
+def resolve_recording(value: int | str, rec_dir: Path) -> tuple[Path, str]:
+    match value:
+        case int():
+            recordings = sorted(rec_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+            path = recordings[value]
+            return path, path.name
+        case str():
+            return rec_dir / value, value
+
+
 def compare(config: CompareConfig):
     console = Console(highlight=False)
     rec_dir = config.results_dir / "recordings"
 
-    a_path = rec_dir / config.a
-    b_path = rec_dir / config.b
+    if not rec_dir.exists():
+        console.print("[red]No recordings found.[/red]")
+        console.print(f"  looked in: {rec_dir}")
+        sys.exit(1)
+
+    try:
+        a_path, a_label = resolve_recording(config.a, rec_dir)
+        b_path, b_label = resolve_recording(config.b, rec_dir)
+    except (IndexError, FileNotFoundError):
+        from parallelrunner.recording import list_recordings
+
+        available = list_recordings(config.results_dir)
+        console.print("[red]Recording not found.[/red]")
+        if available:
+            console.print(f"  available: {', '.join(available)}")
+        sys.exit(1)
 
     if not a_path.exists():
-        console.print(f"[red]Recording not found:[/red] {config.a}")
+        console.print(f"[red]Recording not found:[/red] {a_label}")
         console.print(f"  looked in: {a_path}")
         sys.exit(1)
     if not b_path.exists():
-        console.print(f"[red]Recording not found:[/red] {config.b}")
+        console.print(f"[red]Recording not found:[/red] {b_label}")
         console.print(f"  looked in: {b_path}")
         sys.exit(1)
 
     a = load_recording(a_path)
     b = load_recording(b_path)
-    print_comparison(console, a, b, config.a, config.b)
+    print_comparison(console, a, b, a_label, b_label)
 
 
 if __name__ == "__main__":
