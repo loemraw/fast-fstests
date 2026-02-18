@@ -446,14 +446,9 @@ class Output:
         finally:
             progress.remove_task(task_id)
 
-    def __render_exception_arg(self, arg: tuple[str] | str) -> RenderableType:
-        match arg:
-            case tuple():
-                return Group(*(f"• {a}" for a in arg))
-            case _:
-                return arg
-
     def __print_exception(self, exc: Exception) -> RenderableType:
+        parts: list[RenderableType] = []
+
         match exc:
             case ExceptionGroup():
                 return Panel.fit(
@@ -461,12 +456,19 @@ class Output:
                     title=type(exc).__name__,
                     border_style="yellow",
                 )
+            case _ if exc.args:
+                parts.extend(str(a) for a in exc.args)
             case _:
-                return Panel.fit(
-                    Group(*(self.__render_exception_arg(a) for a in exc.args)),  # pyright: ignore[reportAny]
-                    title=type(exc).__name__,
-                    border_style="red",
-                )
+                parts.append(str(exc) or type(exc).__name__)
+
+        for note in getattr(exc, "__notes__", []):
+            parts.append(f"[dim]{note}[/dim]")
+
+        return Panel.fit(
+            Group(*parts),
+            title=type(exc).__name__,
+            border_style="red",
+        )
 
     def print_exception(self, exc: Exception):
         self.console.print(self.__print_exception(exc))
