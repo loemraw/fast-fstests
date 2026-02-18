@@ -151,7 +151,6 @@ class MkosiSupervisor(Supervisor):
             return
 
         proc = await self.start_command(command, stdout, stderr)
-        await asyncio.sleep(2)
         try:
             yield
         finally:

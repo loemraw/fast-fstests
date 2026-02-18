@@ -204,6 +204,9 @@ class TestRunnerOptions:
     max_supervisor_restarts: Annotated[int, arg(metavar="N", help_behavior_hint=hbh)] = 3
     """max times a test can kill a supervisor before being marked as error (0 to disable restarts)"""
 
+    dmesg: Annotated[bool, arg(help_behavior_hint=hbh)] = True
+    """stream dmesg output during test execution"""
+
 
 @dataclass
 class Config:
