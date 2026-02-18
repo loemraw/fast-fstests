@@ -201,6 +201,9 @@ class TestRunnerOptions:
     probe_interval: Annotated[int, arg(metavar="SECONDS", help_behavior_hint=hbh)] = 30
     """seconds between liveness probes to check if hosts are still sshable (0 to disable)"""
 
+    max_supervisor_restarts: Annotated[int, arg(metavar="N", help_behavior_hint=hbh)] = 3
+    """max times a test can kill a supervisor before being marked as error (0 to disable restarts)"""
+
 
 @dataclass
 class Config:

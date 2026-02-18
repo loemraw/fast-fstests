@@ -65,6 +65,7 @@ class MkosiSupervisor(Supervisor):
 
     @override
     async def __aenter__(self) -> Self:
+        self._exited = False
         proc = await asyncio.create_subprocess_exec(
             *self.mkosi_command,
             cwd=self.config.mkosi.config,
