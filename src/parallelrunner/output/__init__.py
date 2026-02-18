@@ -1,9 +1,9 @@
 import logging
 import os
 import shutil
-import statistics
 from collections import Counter
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryFile
@@ -37,6 +37,12 @@ _STATUS_STYLES: dict[TestStatus, tuple[str, str]] = {
 }
 
 
+@dataclass
+class BaselineResult:
+    status: TestStatus
+    duration: float
+
+
 class Output:
     def __init__(
         self,
@@ -44,7 +50,8 @@ class Output:
         print_failure_list: bool = False,
         print_n_slowest: int = 0,
         print_duration_hist: bool = False,
-        print_test_regressions: int = 0,
+        record: bool = False,
+        diff: bool = False,
     ):
         self.console: Console = Console(highlight=False)
         self.results_dir: Path | None = results_dir
@@ -52,10 +59,19 @@ class Output:
         self._print_failure_list: bool = print_failure_list
         self._print_n_slowest: int = print_n_slowest
         self._print_duration_hist: bool = print_duration_hist
-        self._print_test_regressions: int = print_test_regressions
+        self._record: bool = record
+        self._diff: bool = diff
 
         self._results: list[TestResult] = []
         self._duration: int = 0
+        self._baseline: dict[str, BaselineResult] = (
+            self._load_baseline() if diff else {}
+        )
+
+        if diff and not self._baseline:
+            raise ValueError(
+                "no baseline found, run with --record first to create one"
+            )
 
         test_progress = self._create_test_progress()
         self._test_live: Live = test_progress[0]
@@ -257,39 +273,39 @@ class Output:
     def _print_result(self, test: Test, result: TestResult):
         logger.debug("summary for test %s: %s", test, result.summary)
         style, _ = _STATUS_STYLES[result.status]
-        self.console.print(
+        duration = f"[yellow]{timedelta(seconds=int(result.duration))}"
+        parts = [
             f"  [bold {style}]{result.status.name.lower()}[/bold {style}]",
             result.name,
-            self._format_duration(test, result),
-            f"[dim]{result.summary}" if result.summary else "",
-        )
-
-    def _format_duration(self, test: Test, result: TestResult) -> str:
-        duration = f"[yellow]{timedelta(seconds=int(result.duration))}"
-        if self._print_test_regressions <= 0:
-            return duration
-
-        duration_files = [
-            Path(entry).joinpath("duration")
-            for entry in os.scandir(self._get_test_path(test).parent)
-            if entry.is_dir()
-        ]
-        times = [
-            float(f.read_text()) for f in duration_files if f.is_file()
+            duration,
         ]
 
-        median = statistics.median(times) if times else result.duration
-        deviation = abs(result.duration - median)
-        bounded = min(float(self._print_test_regressions), deviation) / self._print_test_regressions
+        if self._diff:
+            parts.append(self._format_diff(result))
 
-        if result.duration > median:
-            g = b = int(255 * (1 - bounded))
-            color = f"#ff{g:02x}{b:02x}"
-        else:
-            r = b = int(255 * (1 - bounded))
-            color = f"#{r:02x}ff{b:02x}"
+        if result.summary:
+            parts.append(f"[dim]{result.summary}")
 
-        return f"{duration} [{color}]\\[p50 {timedelta(seconds=int(median))}]"
+        self.console.print(*parts)
+
+    def _format_diff(self, result: TestResult) -> str:
+        baseline = self._baseline.get(result.name)
+        if baseline is None:
+            return "[dim]\\[new]"
+
+        if baseline.status != result.status:
+            old = baseline.status.name.lower()
+            new = result.status.name.lower()
+            is_regression = result.status in (TestStatus.FAIL, TestStatus.ERROR)
+            color = "red" if is_regression else "green"
+            return f"[bold {color}]\\[{old} → {new}]"
+
+        delta = int(result.duration - baseline.duration)
+        if delta == 0:
+            return ""
+        sign = "+" if delta > 0 else ""
+        color = "red" if delta > 0 else "green"
+        return f"[{color}]\\[{sign}{delta}s]"
 
     # --- Summary ---
 
@@ -306,6 +322,12 @@ class Output:
             self._print_time_histogram()
 
         self._print_result_counts()
+
+        if self._diff:
+            self._print_diff_summary()
+
+        if self._record:
+            self._save_baseline()
 
         self.console.print()
 
@@ -391,6 +413,105 @@ class Output:
             return plt.build()
 
         self.console.print(Padding(RichPlotext(make_plot), (0, 0, 0, 2)))
+
+    def _print_diff_summary(self):
+        regressions: list[tuple[str, str, str]] = []
+        fixes: list[tuple[str, str, str]] = []
+        new_tests: list[str] = []
+
+        for result in self._results:
+            baseline = self._baseline.get(result.name)
+            if baseline is None:
+                new_tests.append(result.name)
+            elif baseline.status != result.status:
+                old = baseline.status.name.lower()
+                new = result.status.name.lower()
+                if result.status in (TestStatus.FAIL, TestStatus.ERROR):
+                    regressions.append((result.name, old, new))
+                elif baseline.status in (TestStatus.FAIL, TestStatus.ERROR):
+                    fixes.append((result.name, old, new))
+
+        if not regressions and not fixes and not new_tests:
+            return
+
+        self.console.print()
+        self.console.print(Rule(" Diff", align="left"))
+
+        if regressions:
+            self.console.print(
+                f"  [bold red]Regressions[/bold red] {len(regressions)}"
+            )
+            for name, old, new in regressions:
+                self.console.print(f"    {name}  {old} → {new}")
+
+        if fixes:
+            self.console.print(f"  [bold green]Fixes[/bold green] {len(fixes)}")
+            for name, old, new in fixes:
+                self.console.print(f"    {name}  {old} → {new}")
+
+        if new_tests:
+            self.console.print(f"  [bold blue]New[/bold blue] {len(new_tests)}")
+
+    # --- Baseline ---
+
+    def _load_baseline(self) -> dict[str, BaselineResult]:
+        if self.results_dir is None:
+            return {}
+
+        baseline_dir = self.results_dir / "baseline"
+        if not baseline_dir.exists():
+            return {}
+
+        baseline: dict[str, BaselineResult] = {}
+        for entry in os.scandir(baseline_dir):
+            if not entry.is_dir():
+                continue
+
+            # Handle nested test names like "btrfs/001"
+            test_dir = Path(entry.path)
+            status_file = test_dir / "status"
+            duration_file = test_dir / "duration"
+
+            # Check for nested subdirectories (e.g., baseline/btrfs/001/)
+            if not status_file.exists():
+                for sub_entry in os.scandir(test_dir):
+                    if not sub_entry.is_dir():
+                        continue
+                    sub_dir = Path(sub_entry.path)
+                    sub_status = sub_dir / "status"
+                    sub_duration = sub_dir / "duration"
+                    if sub_status.exists() and sub_duration.exists():
+                        name = f"{entry.name}/{sub_entry.name}"
+                        baseline[name] = BaselineResult(
+                            status=TestStatus[sub_status.read_text().strip()],
+                            duration=float(sub_duration.read_text().strip()),
+                        )
+                continue
+
+            if duration_file.exists():
+                baseline[entry.name] = BaselineResult(
+                    status=TestStatus[status_file.read_text().strip()],
+                    duration=float(duration_file.read_text().strip()),
+                )
+
+        return baseline
+
+    def _save_baseline(self):
+        if self.results_dir is None:
+            return
+
+        latest = self.results_dir / "latest"
+        baseline = self.results_dir / "baseline"
+
+        if not latest.exists():
+            logger.warning("no latest results to save as baseline")
+            return
+
+        if baseline.exists():
+            shutil.rmtree(baseline)
+
+        _ = shutil.copytree(latest, baseline, symlinks=True)
+        self.console.print(f"  [dim]Baseline saved to {baseline}")
 
     # --- Misc ---
 
