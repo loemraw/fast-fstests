@@ -108,6 +108,7 @@ class TestRunner:
                             test,
                             TestResult.from_error(
                                 test.name,
+                                test.id,
                                 "supervisor died",
                                 0.0,
                                 datetime.now(),
@@ -121,6 +122,7 @@ class TestRunner:
                                 test,
                                 TestResult.from_error(
                                     test.name,
+                                    test.id,
                                     f"killed supervisor {count} times",
                                     0.0,
                                     datetime.now(),

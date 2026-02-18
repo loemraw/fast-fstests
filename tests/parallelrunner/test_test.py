@@ -5,9 +5,10 @@ from parallelrunner.test import Test, TestResult, TestStatus
 
 
 def test_from_error():
-    result = TestResult.from_error("btrfs/001", "timed out", 30.0, datetime(2025, 1, 1))
+    result = TestResult.from_error("btrfs/001", "test-id", "timed out", 30.0, datetime(2025, 1, 1))
 
     assert result.name == "btrfs/001"
+    assert result.test_id == "test-id"
     assert result.status == TestStatus.ERROR
     assert result.duration == 30.0
     assert result.summary == "timed out"
@@ -25,7 +26,7 @@ def test_status_enum_values():
 class ConcreteTest(Test):
     @override
     def make_result(self, duration: float, retcode: int, stdout: bytes, stderr: bytes) -> TestResult:
-        return TestResult(self.name, TestStatus.PASS, duration, datetime.now(), None, retcode, stdout, stderr)
+        return TestResult(self.name, self.id, TestStatus.PASS, duration, datetime.now(), None, retcode, stdout, stderr)
 
 
 def test_retry_creates_new_id():

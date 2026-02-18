@@ -15,6 +15,7 @@ class TestStatus(Enum):
 @dataclass
 class TestResult:
     name: str
+    test_id: str
     status: TestStatus
     duration: float
     timestamp: datetime
@@ -25,10 +26,10 @@ class TestResult:
 
     @staticmethod
     def from_error(
-        name: str, summary: str, duration: float, timestamp: datetime
+        name: str, test_id: str, summary: str, duration: float, timestamp: datetime
     ) -> "TestResult":
         return TestResult(
-            name, TestStatus.ERROR, duration, timestamp, summary, None, None, None
+            name, test_id, TestStatus.ERROR, duration, timestamp, summary, None, None, None
         )
 
 

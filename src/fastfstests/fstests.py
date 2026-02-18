@@ -52,6 +52,7 @@ class FSTest(Test):
         )
         return TestResult(
             self.name,
+            self.id,
             status,
             duration,
             datetime.now(),

@@ -46,7 +46,7 @@ def test_record_retry_tracks_count(tmp_path: Path):
         name = "btrfs/001"
         id = "2025-01-01_00-00-00_000001"
 
-    result = TestResult.from_error("btrfs/001", "supervisor died", 0.0, datetime.now())
+    result = TestResult.from_error("btrfs/001", "test-id", "supervisor died", 0.0, datetime.now())
     output.record_retry(FakeTest(), result)  # type: ignore[arg-type]
 
     assert output._retries == {"btrfs/001": 1}
@@ -60,7 +60,7 @@ def test_record_retry_increments(tmp_path: Path):
         name = "btrfs/001"
         id = "2025-01-01_00-00-00_000001"
 
-    result = TestResult.from_error("btrfs/001", "supervisor died", 0.0, datetime.now())
+    result = TestResult.from_error("btrfs/001", "test-id", "supervisor died", 0.0, datetime.now())
     output.record_retry(FakeTest(), result)  # type: ignore[arg-type]
     output.record_retry(FakeTest(), result)  # type: ignore[arg-type]
 

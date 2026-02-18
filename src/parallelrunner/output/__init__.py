@@ -219,15 +219,19 @@ class Output:
         os.makedirs(path, exist_ok=True)
         return path
 
+    @staticmethod
+    def _symlink_dir(target: Path, link: Path):
+        """Create a directory symlink, replacing any existing one."""
+        if link.is_symlink():
+            link.unlink()
+        os.makedirs(link.parent, exist_ok=True)
+        os.symlink(target.absolute(), link)
+
     def _link_latest(self, test: Test):
         if self.results_dir is None:
             return
         test_path = self._get_test_path(test)
-        latest_link = self.results_dir / "latest" / test.name
-        if latest_link.is_symlink():
-            latest_link.unlink()
-        os.makedirs(latest_link.parent, exist_ok=True)
-        os.symlink(test_path.absolute(), latest_link)
+        self._symlink_dir(test_path, self.results_dir / "latest" / test.name)
 
     def _reset_latest(self):
         if self.results_dir is None:
@@ -308,8 +312,7 @@ class Output:
             if self.results_dir is not None:
                 header.append("@")
                 header.append(str(
-                    self.results_dir / result.name
-                    / result.timestamp.strftime("%Y-%m-%d_%H-%M-%S_%f")
+                    self.results_dir / result.name / result.test_id
                 ))
 
             self.console.print()
@@ -403,17 +406,8 @@ class Output:
         rec_dir = self.results_dir / "recordings" / label
         os.makedirs(rec_dir, exist_ok=True)
         for result in self._results:
-            test_path = (
-                self.results_dir
-                / "tests"
-                / result.name
-                / result.timestamp.strftime("%Y-%m-%d_%H-%M-%S_%f")
-            )
-            link = rec_dir / result.name
-            if link.is_symlink():
-                link.unlink()
-            os.makedirs(link.parent, exist_ok=True)
-            os.symlink(test_path.absolute(), link)
+            test_path = self.results_dir / "tests" / result.name / result.test_id
+            self._symlink_dir(test_path, rec_dir / result.name)
         self.console.print(f"  [dim]Recording saved: {label}")
 
     # --- Misc ---

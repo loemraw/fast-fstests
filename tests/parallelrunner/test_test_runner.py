@@ -25,6 +25,7 @@ class MockTest(Test):
     ) -> TestResult:
         return TestResult(
             self.name,
+            self.id,
             TestStatus.PASS,
             duration,
             datetime.now(),
