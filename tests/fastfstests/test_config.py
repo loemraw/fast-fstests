@@ -31,16 +31,21 @@ def test_verbose_with_results_dir():
     assert opts.verbose is True
 
 
-def test_regressions_without_results_dir():
-    with pytest.raises(ValueError, match="--print-test-regressions requires --results-dir"):
-        OutputOptions(print_test_regressions=5, results_dir=None)
+def test_record_without_results_dir():
+    with pytest.raises(ValueError, match="--record requires --results-dir"):
+        OutputOptions(record=True, results_dir=None)
 
 
-def test_regressions_negative():
-    with pytest.raises(ValueError, match="--print-test-regressions must be >= 0"):
-        OutputOptions(print_test_regressions=-1, results_dir=Path("/tmp/results"))
+def test_diff_without_results_dir():
+    with pytest.raises(ValueError, match="--diff requires --results-dir"):
+        OutputOptions(diff=True, results_dir=None)
 
 
-def test_regressions_with_results_dir():
-    opts = OutputOptions(print_test_regressions=5, results_dir=Path("/tmp/results"))
-    assert opts.print_test_regressions == 5
+def test_record_with_results_dir():
+    opts = OutputOptions(record=True, results_dir=Path("/tmp/results"))
+    assert opts.record is True
+
+
+def test_diff_with_results_dir():
+    opts = OutputOptions(diff=True, results_dir=Path("/tmp/results"))
+    assert opts.diff is True

@@ -77,6 +77,7 @@ fast-fstests --help
 | `num`       | int       | `--mkosi.num`, `-n`     | Number of mkosi VMs to spawn.               |
 | `config`    | Path      | `--mkosi.config`        | **Required if using mkosi** Path to mkosi config.  |
 | `options`   | list[str] | `--mkosi.options`       | List of options for mkosi.                  |
+| `include`   | Path      | `--mkosi.include`       | Path to mkosi config to pass through to mkosi. |
 | `fstests`   | Path      | `--mkosi.fstests`       | **Required if using mkosi** Path to fstests dir on mkosi VM.            |
 | `timeout`   | int       | `--mkosi.timeout`       | Max seconds to spawn a mkosi VM.            |
 | `build`     | int | `--mkosi.build`, `-f` | Build the mkosi image before spawning VMs, may specify multiple times -ff for different mkosi force levels. |
@@ -91,10 +92,12 @@ fast-fstests --help
 | Option         | Type      | CLI Argument(s)         | Description                                 |
 |----------------|-----------|-------------------------|---------------------------------------------|
 | `results_dir`  | Path      | `--results-dir`         | Path to store test results.                 |
+| `verbose`      | bool      | `--verbose`, `-v`       | Print debugging logs to RESULTS_DIR/log. Requires `--results-dir`. |
 | `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
 | `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
 | `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
-| `print_test_regressions` | int | `--print-test-regressions` | Print median duration for previous test runs. The argument is the number of seconds of deviation from the median to count as a regression. |
+| `record` | bool | `--record` | Save this run as the baseline for future diffs. |
+| `diff` | bool | `--diff` | Diff results against a recorded baseline. Shows status changes and duration deltas per test, plus a summary of regressions and fixes. |
 
 ## run
 ```
@@ -157,5 +160,5 @@ Should successfully ssh into qemu vm.
 
 6. If all steps above are working you should be good to go!
 ```
-fast-fstests --mkosi 5 --group btrfs/auto
+fast-fstests -n 5 -g btrfs/auto
 ```
