@@ -12,6 +12,20 @@ from .test import TestStatus
 class RecordedResult:
     status: TestStatus
     duration: float
+    retries: int = 0
+
+
+def _read_result(test_dir: Path) -> RecordedResult | None:
+    status_file = test_dir / "status"
+    duration_file = test_dir / "duration"
+    if not status_file.exists() or not duration_file.exists():
+        return None
+    retries_file = test_dir / "retries"
+    return RecordedResult(
+        status=TestStatus[status_file.read_text().strip()],
+        duration=float(duration_file.read_text().strip()),
+        retries=int(retries_file.read_text().strip()) if retries_file.exists() else 0,
+    )
 
 
 def load_recording(rec_dir: Path) -> dict[str, RecordedResult]:
@@ -22,30 +36,20 @@ def load_recording(rec_dir: Path) -> dict[str, RecordedResult]:
             continue
 
         test_dir = Path(entry.path)
-        status_file = test_dir / "status"
-        duration_file = test_dir / "duration"
 
-        # Handle nested test names like "btrfs/001"
-        if not status_file.exists():
-            for sub_entry in os.scandir(test_dir):
-                if not sub_entry.is_dir():
-                    continue
-                sub_dir = Path(sub_entry.path)
-                sub_status = sub_dir / "status"
-                sub_duration = sub_dir / "duration"
-                if sub_status.exists() and sub_duration.exists():
-                    name = f"{entry.name}/{sub_entry.name}"
-                    results[name] = RecordedResult(
-                        status=TestStatus[sub_status.read_text().strip()],
-                        duration=float(sub_duration.read_text().strip()),
-                    )
+        # Try reading directly (flat test name).
+        result = _read_result(test_dir)
+        if result is not None:
+            results[entry.name] = result
             continue
 
-        if duration_file.exists():
-            results[entry.name] = RecordedResult(
-                status=TestStatus[status_file.read_text().strip()],
-                duration=float(duration_file.read_text().strip()),
-            )
+        # Handle nested test names like "btrfs/001".
+        for sub_entry in os.scandir(test_dir):
+            if not sub_entry.is_dir():
+                continue
+            sub_result = _read_result(Path(sub_entry.path))
+            if sub_result is not None:
+                results[f"{entry.name}/{sub_entry.name}"] = sub_result
 
     return results
 
@@ -57,6 +61,17 @@ def list_recordings(results_dir: Path) -> list[str]:
     return sorted(
         entry.name for entry in os.scandir(rec_dir) if entry.is_dir()
     )
+
+
+def resolve_recording(value: int | str, results_dir: Path) -> tuple[Path, str]:
+    rec_dir = results_dir / "recordings"
+    match value:
+        case int():
+            recordings = sorted(rec_dir.iterdir(), key=lambda p: p.stat().st_mtime)
+            path = recordings[value]
+            return path, path.name
+        case str():
+            return rec_dir / value, value
 
 
 def print_comparison(
@@ -73,11 +88,14 @@ def print_comparison(
     new_tests: list[str] = []
     removed_tests: list[str] = []
     timing: list[tuple[str, int]] = []
+    flaky: list[tuple[str, int]] = []
 
     for name in all_tests:
         ra, rb = a.get(name), b.get(name)
         if ra is None:
             new_tests.append(name)
+            if rb is not None and rb.retries > 0:
+                flaky.append((name, rb.retries))
             continue
         if rb is None:
             removed_tests.append(name)
@@ -95,6 +113,9 @@ def print_comparison(
         if abs(delta) >= 5:
             timing.append((name, delta))
 
+        if rb.retries > 0 and rb.status == TestStatus.PASS:
+            flaky.append((name, rb.retries))
+
     console.print()
     console.print(Rule(f" {label_a} vs {label_b}", align="left"))
 
@@ -108,10 +129,17 @@ def print_comparison(
         for name, old, new in fixes:
             console.print(f"    {name}  {old} → {new}")
 
+    if flaky:
+        console.print(f"  [bold yellow]Flaky[/bold yellow] {len(flaky)}")
+        for name, retries in flaky:
+            console.print(f"    {name}  {retries} {'retry' if retries == 1 else 'retries'}")
+
     if new_tests:
-        console.print(f"  [bold blue]New in {label_b}[/bold blue] {len(new_tests)}")
-        for name in new_tests:
-            console.print(f"    {name}")
+        new_non_flaky = [n for n in new_tests if not any(f[0] == n for f in flaky)]
+        if new_non_flaky:
+            console.print(f"  [bold blue]New in {label_b}[/bold blue] {len(new_non_flaky)}")
+            for name in new_non_flaky:
+                console.print(f"    {name}")
 
     if removed_tests:
         console.print(f"  [bold yellow]Removed from {label_b}[/bold yellow] {len(removed_tests)}")
@@ -126,7 +154,7 @@ def print_comparison(
             color = "red" if delta > 0 else "green"
             console.print(f"    [{color}]{sign}{delta}s[/{color}]  {name}")
 
-    if not regressions and not fixes and not new_tests and not removed_tests and not timing:
+    if not regressions and not fixes and not new_tests and not removed_tests and not timing and not flaky:
         console.print("  No differences found.")
 
     console.print()
