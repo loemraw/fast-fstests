@@ -24,6 +24,7 @@ class TestRunner:
         bpftrace: str | Path | None = None,
         probe_interval: int = 0,
         max_supervisor_restarts: int = 3,
+        dmesg: bool = False,
     ):
         self.tests: list[Test] = list(tests)
         self.supervisors: list[Supervisor] = list(supervisors)
@@ -32,6 +33,7 @@ class TestRunner:
         self.test_timeout: int | None = test_timeout
         self.probe_interval: int = probe_interval
         self.max_supervisor_restarts: int = max_supervisor_restarts
+        self.dmesg: bool = dmesg
 
         self._death_counts: dict[str, int] = {}
 
@@ -156,8 +158,9 @@ class TestRunner:
             test = self.tests.pop()
             if current_test is not None:
                 current_test[0] = test
-            async with self._bpftrace(supervisor, test):
-                await self._run_test(supervisor, test)
+            async with self._dmesg(supervisor, test):
+                async with self._bpftrace(supervisor, test):
+                    await self._run_test(supervisor, test)
             if current_test is not None:
                 current_test[0] = None
 
@@ -176,6 +179,19 @@ class TestRunner:
 
         with self.output.log_bpftrace(test) as (stdout, stderr):
             async with supervisor.trace(self.bpftrace_command, stdout, stderr):
+                yield
+
+    @asynccontextmanager
+    async def _dmesg(self, supervisor: Supervisor, test: Test):
+        if not self.dmesg:
+            yield
+            return
+
+        with self.output.log_dmesg(test) as stdout:
+            if stdout is None:
+                yield
+                return
+            async with supervisor.trace("dmesg -w", stdout, None):
                 yield
 
     # --- Probe ---

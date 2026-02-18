@@ -180,6 +180,18 @@ class Output:
                 self._link("bpftrace-stderr", path, latest)
                 yield (stdout, stderr)
 
+    @contextmanager
+    def log_dmesg(self, test: Test):
+        if self.results_dir is None:
+            yield None
+            return
+
+        path = self._get_test_path(test)
+        latest = self._get_latest_path(test)
+        with open(path / "dmesg", "wb+") as f:
+            self._link("dmesg", path, latest)
+            yield f
+
     # --- Result persistence ---
 
     def _get_test_path(self, test: Test) -> Path:
