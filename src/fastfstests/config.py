@@ -98,7 +98,7 @@ class TestSelectionOptions:
 
 @dataclass
 class MkosiOptions:
-    num: Annotated[int, arg(aliases=["-n"], help_behavior_hint=hbh)] = 0
+    num: Annotated[int, arg(aliases=["-n"], help_behavior_hint=hbh)] = 10
     """number of mkosi vms to spawn"""
 
     config: Annotated[Path | None, arg(metavar="PATH", help_behavior_hint=hbh)] = None
