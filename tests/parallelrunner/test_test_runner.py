@@ -190,12 +190,13 @@ def test_supervisor_spawn_failure(output: Output):
     class FailSpawnSupervisor(MockSupervisor):
         @override
         async def __aenter__(self) -> Self:
+            self._exited = True
             raise RuntimeError("spawn failed")
 
     tests = make_tests(3)
     runner = TestRunner(tests, [FailSpawnSupervisor()], output)
 
-    with pytest.raises(ExceptionGroup):
+    with pytest.raises(RuntimeError, match="all supervisors failed to spawn"):
         asyncio.run(runner.run())
 
 
@@ -231,3 +232,44 @@ def test_run_test_exception_propagates(output: Output):
 
     with pytest.raises(ExceptionGroup):
         asyncio.run(runner.run())
+
+
+def test_partial_spawn_failure(output: Output):
+    """One supervisor fails to spawn, other succeeds — tests run on healthy one."""
+
+    class FailSpawnSupervisor(MockSupervisor):
+        @override
+        async def __aenter__(self) -> Self:
+            self._exited = True
+            raise RuntimeError("spawn failed")
+
+    healthy = MockSupervisor()
+    tests = make_tests(3)
+    runner = TestRunner(tests, [FailSpawnSupervisor(), healthy], output)
+
+    asyncio.run(runner.run())
+
+    assert len(healthy.tests_run) == 3
+
+
+def test_worker_oserror_continues(output: Output):
+    """Worker that raises OSError dies; other workers pick up remaining tests."""
+
+    class OSErrorSupervisor(MockSupervisor):
+        @override
+        async def run_test(
+            self,
+            test: Test,
+            timeout: int | None,
+            stdout: IO[bytes],
+            stderr: IO[bytes],
+        ) -> TestResult:
+            raise OSError("connection refused")
+
+    healthy = MockSupervisor()
+    tests = make_tests(5)
+    runner = TestRunner(tests, [OSErrorSupervisor(), healthy], output)
+
+    asyncio.run(runner.run())
+
+    assert len(healthy.tests_run) > 0

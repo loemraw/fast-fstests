@@ -110,12 +110,18 @@ class Output:
     @contextmanager
     def spawning_supervisor(self, supervisor: Supervisor):
         task_id = self._supervisor_progress.add_task(repr(supervisor))
+        failed = False
         try:
             yield
+        except BaseException:
+            failed = True
+            raise
         finally:
             self._supervisor_progress.remove_task(task_id)
             self._supervisors_progress.advance(self._supervisor_task_id)
-            if supervisor.exited:
+            if failed:
+                self.console.print(f"  [bold red]failed[/bold red] {supervisor}")
+            elif supervisor.exited:
                 self.console.print(f"  [bold green]exit[/bold green] {supervisor}")
             else:
                 self.console.print(f"  [bold green]spawn[/bold green] {supervisor}")

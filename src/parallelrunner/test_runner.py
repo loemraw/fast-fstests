@@ -55,22 +55,26 @@ class TestRunner:
             self.output.print_summary()
 
     async def __worker(self, supervisor: Supervisor):
-        if self.probe_interval > 0:
-            try:
-                async with asyncio.TaskGroup() as tg:
-                    probe_task = tg.create_task(self.__probe_loop(supervisor))
+        try:
+            if self.probe_interval > 0:
+                try:
+                    async with asyncio.TaskGroup() as tg:
+                        probe_task = tg.create_task(self.__probe_loop(supervisor))
 
-                    async def run_tests():
-                        try:
-                            await self.__run_tests_loop(supervisor)
-                        finally:
-                            _ = probe_task.cancel()
+                        async def run_tests():
+                            try:
+                                await self.__run_tests_loop(supervisor)
+                            finally:
+                                _ = probe_task.cancel()
 
-                    _ = tg.create_task(run_tests())
-            except* SupervisorExited:
-                pass
-        else:
-            await self.__run_tests_loop(supervisor)
+                        _ = tg.create_task(run_tests())
+                except* SupervisorExited:
+                    pass
+            else:
+                await self.__run_tests_loop(supervisor)
+        except OSError:
+            logger.exception("worker for %r crashed", supervisor)
+            self.output.supervisor_died(supervisor)
 
     async def __run_tests_loop(self, supervisor: Supervisor):
         async def run_test(test: Test):
@@ -129,9 +133,17 @@ class TestRunner:
                 return await supervisor.__aenter__()
 
         with self.output.spawning_supervisors(len(self.supervisors)):
-            async with asyncio.TaskGroup() as tg:
-                for supervisor in self.supervisors:
-                    _ = tg.create_task(spawn_supervisor(supervisor))
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    for supervisor in self.supervisors:
+                        _ = tg.create_task(spawn_supervisor(supervisor))
+            except* (TimeoutError, RuntimeError, OSError) as eg:
+                for exc in eg.exceptions:
+                    logger.error("supervisor spawn failed: %s", exc)
+                self.supervisors = [s for s in self.supervisors if not s.exited]
+
+        if not self.supervisors:
+            raise RuntimeError("all supervisors failed to spawn")
 
     async def __cleanup_supervisors(self):
         async def supervisor_exit(supervisor: Supervisor):
