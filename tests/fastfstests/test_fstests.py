@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from fastfstests.config import Config, MkosiOptions, TestSelectionOptions
+from fastfstests.config import RunConfig as Config, MkosiOptions, TestSelectionOptions
 from fastfstests.fstests import (
     FSTest,
     collect_tests,

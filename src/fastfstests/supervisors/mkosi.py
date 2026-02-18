@@ -15,7 +15,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import IO, Self, override
 
-from fastfstests.config import Config
+from fastfstests.config import RunConfig as Config
 from parallelrunner.supervisor import Supervisor
 from parallelrunner.test import Test, TestResult
 

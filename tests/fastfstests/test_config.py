@@ -33,19 +33,14 @@ def test_verbose_with_results_dir():
 
 def test_record_without_results_dir():
     with pytest.raises(ValueError, match="--record requires --results-dir"):
-        OutputOptions(record=True, results_dir=None)
-
-
-def test_diff_without_results_dir():
-    with pytest.raises(ValueError, match="--diff requires --results-dir"):
-        OutputOptions(diff=True, results_dir=None)
+        OutputOptions(record="my-label", results_dir=None)
 
 
 def test_record_with_results_dir():
-    opts = OutputOptions(record=True, results_dir=Path("/tmp/results"))
-    assert opts.record is True
+    opts = OutputOptions(record="my-label", results_dir=Path("/tmp/results"))
+    assert opts.record == "my-label"
 
 
-def test_diff_with_results_dir():
-    opts = OutputOptions(diff=True, results_dir=Path("/tmp/results"))
-    assert opts.diff is True
+def test_record_none_by_default():
+    opts = OutputOptions()
+    assert opts.record is None

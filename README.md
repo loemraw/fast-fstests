@@ -96,8 +96,23 @@ fast-fstests --help
 | `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
 | `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
 | `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
-| `record` | bool | `--record` | Save this run as the baseline for future diffs. |
-| `diff` | bool | `--diff` | Diff results against a recorded baseline. Shows status changes and duration deltas per test, plus a summary of regressions and fixes. |
+| `record` | str | `--record [LABEL]` | Record this run for future comparisons. If no label is given, a timestamp is used. |
+
+## Comparing Runs
+
+Record runs with `--record`:
+```bash
+fast-fstests --record before-fix -n 5 -g btrfs/auto
+# make changes...
+fast-fstests --record after-fix -n 5 -g btrfs/auto
+```
+
+Compare any two recordings:
+```bash
+fast-fstests compare before-fix after-fix
+```
+
+Recordings are stored as directory symlinks in `results/recordings/{label}/` and are never deleted.
 
 ## run
 ```

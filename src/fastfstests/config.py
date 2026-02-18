@@ -1,10 +1,11 @@
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
 import tyro
-from tyro.conf import OmitArgPrefixes, Positional, UseCounterAction, arg
+from tyro.conf import OmitArgPrefixes, OmitSubcommandPrefixes, Positional, UseCounterAction, arg, subcommand
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,20 @@ class CustomVMOptions:
     """
 
 
+OptionalLabel = Annotated[
+    str | None,
+    tyro.constructors.PrimitiveConstructorSpec(
+        nargs="?",
+        metavar="LABEL",
+        instance_from_str=lambda args: args[0]
+        if args and args[0]
+        else datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+        is_instance=lambda instance: isinstance(instance, str) or instance is None,
+        str_from_instance=lambda instance: [instance] if instance else [],
+    ),
+]
+
+
 @dataclass
 class OutputOptions:
     results_dir: Annotated[Path | None, arg(metavar="PATH", help_behavior_hint=hbh)] = (
@@ -159,19 +174,14 @@ class OutputOptions:
     print_duration_hist: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """print histogram of test times [plotext required]"""
 
-    record: Annotated[bool, arg(help_behavior_hint=hbh)] = False
-    """record this run as the baseline for future diffs"""
-
-    diff: Annotated[bool, arg(help_behavior_hint=hbh)] = False
-    """diff results against a recorded baseline"""
+    record: OptionalLabel = None
+    """record this run for future comparisons, optionally with a label"""
 
     def __post_init__(self):
         if self.verbose and self.results_dir is None:
             raise ValueError("--verbose requires --results-dir to be set")
-        if self.record and self.results_dir is None:
+        if self.record is not None and self.results_dir is None:
             raise ValueError("--record requires --results-dir to be set")
-        if self.diff and self.results_dir is None:
-            raise ValueError("--diff requires --results-dir to be set")
 
 
 
@@ -206,10 +216,8 @@ class TestRunnerOptions:
 
 
 @dataclass
-class Config:
-    """
-    fast-fstests is an fstests wrapper that parallelizes test execution with vms
-    """
+class RunConfig:
+    """run fstests in parallel"""
 
     fstests: Annotated[Path | None, arg(metavar="PATH", help_behavior_hint=hbh)] = (  # pyright: ignore[reportAny]
         tyro.MISSING
@@ -225,3 +233,27 @@ class Config:
     test_runner: OmitArgPrefixes[TestRunnerOptions] = field(
         default_factory=TestRunnerOptions
     )
+
+
+@dataclass
+class CompareConfig:
+    """compare two recorded runs"""
+
+    a: Annotated[str, Positional]
+    """first recording label"""
+
+    b: Annotated[str, Positional]
+    """second recording label"""
+
+    results_dir: Annotated[Path, arg(metavar="PATH")] = Path("results")
+    """path to results directory"""
+
+
+@dataclass
+class Config:
+    """fast-fstests is an fstests wrapper that parallelizes test execution with vms"""
+
+    command: OmitSubcommandPrefixes[
+        Annotated[RunConfig, subcommand("run")]
+        | Annotated[CompareConfig, subcommand("compare")]
+    ] = field(default_factory=RunConfig)

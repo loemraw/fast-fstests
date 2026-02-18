@@ -9,7 +9,7 @@ from typing import override
 
 from parallelrunner import Test, TestResult, TestStatus
 
-from .config import Config
+from .config import RunConfig as Config
 
 logger = logging.getLogger(__name__)
 
