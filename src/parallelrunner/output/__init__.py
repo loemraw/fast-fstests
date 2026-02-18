@@ -179,6 +179,7 @@ class Output:
 
         path = self._get_test_path(test)
         self._link_latest(test)
+        self._link_recording(test)
         with open(path / "stdout", "wb+") as stdout:
             with open(path / "stderr", "wb+") as stderr:
                 yield stdout, stderr
@@ -188,7 +189,6 @@ class Output:
         self._overall_test_progress.advance(self._overall_test_task_id)
         self._print_result(test, result)
         self._save_result(test, result)
-        self._link_recording(result)
 
     def record_retry(self, test: Test, result: TestResult):
         self._retries[test.name] = self._retries.get(test.name, 0) + 1
@@ -263,6 +263,10 @@ class Output:
             ("status", result.status.name),
         ]:
             _ = path.joinpath(name).write_text(value)
+
+        retries = self._retries.get(test.name, 0)
+        if retries > 0:
+            _ = path.joinpath("retries").write_text(str(retries))
 
     # --- Console output ---
 
@@ -411,12 +415,12 @@ class Output:
         if rec_dir.exists():
             shutil.rmtree(rec_dir)
 
-    def _link_recording(self, result: TestResult):
+    def _link_recording(self, test: Test):
         if self.results_dir is None or self._recording_label is None:
             return
         rec_dir = self.results_dir / "recordings" / self._recording_label
-        test_path = self.results_dir / "tests" / result.name / result.test_id
-        self._symlink_dir(test_path, rec_dir / result.name)
+        test_path = self.results_dir / "tests" / test.name / test.id
+        self._symlink_dir(test_path, rec_dir / test.name)
 
     # --- Misc ---
 
