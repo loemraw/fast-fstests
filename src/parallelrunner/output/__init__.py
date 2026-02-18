@@ -359,6 +359,14 @@ class Output:
                 self.console.print(
                     Panel.fit(result.stderr.decode(), title="stderr", title_align="left")
                 )
+            if self.results_dir is not None:
+                dmesg_path = self.results_dir / "latest" / result.name / "dmesg"
+                if dmesg_path.exists():
+                    dmesg = dmesg_path.read_bytes().decode(errors="replace")
+                    if dmesg.strip():
+                        self.console.print(
+                            Panel.fit(dmesg, title="dmesg", title_align="left")
+                        )
 
     def _print_failed_list(self):
         failed = [
