@@ -87,7 +87,7 @@ class Output:
 
     @contextmanager
     def spawning_supervisor(self, supervisor: Supervisor):
-        task_id = self._test_progress.add_task(f"spawning {supervisor!r}")
+        task_id = self._test_progress.add_task(f"▸ spawning {supervisor!r}")
         failed = False
         try:
             yield
@@ -97,24 +97,24 @@ class Output:
         finally:
             self._test_progress.remove_task(task_id)
             if failed:
-                self.console.print(f"  [bold red]failed[/bold red] {supervisor}")
+                self.console.print(f"  ▸ [bold red]failed[/bold red] {supervisor}")
             else:
-                self.console.print(f"  [bold green]spawn[/bold green] {supervisor}")
+                self.console.print(f"  ▸ [bold green]spawn[/bold green] {supervisor}")
 
     @contextmanager
     def respawning_supervisor(self, supervisor: Supervisor):
-        task_id = self._test_progress.add_task(f"respawning {supervisor!r}")
+        task_id = self._test_progress.add_task(f"▸ respawning {supervisor!r}")
         try:
             yield
         finally:
             self._test_progress.remove_task(task_id)
-            self.console.print(f"  [bold green]respawn[/bold green] {supervisor}")
+            self.console.print(f"  ▸ [bold green]respawn[/bold green] {supervisor}")
 
     def exited_supervisor(self, supervisor: Supervisor):
-        self.console.print(f"  [bold green]exit[/bold green] {supervisor}")
+        self.console.print(f"  ▸ [bold green]exit[/bold green] {supervisor}")
 
     def supervisor_died(self, supervisor: Supervisor, test_name: str | None = None):
-        msg = f"  [bold red]dead[/bold red] {supervisor}"
+        msg = f"  ▸ [bold red]dead[/bold red] {supervisor}"
         if test_name is not None:
             msg += f" [dim](was running {test_name})"
         self.console.print(msg)
