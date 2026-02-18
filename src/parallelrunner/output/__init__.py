@@ -64,6 +64,7 @@ class Output:
         self._diff: bool = diff
 
         self._results: list[TestResult] = []
+        self._retries: dict[str, int] = {}
         self._duration: int = 0
         self._baseline: dict[str, BaselineResult] = (
             self._load_baseline() if diff else {}
@@ -203,6 +204,10 @@ class Output:
         self._results.append(result)
         self._overall_test_progress.advance(self._overall_test_task_id)
         self._print_result(test, result)
+        self._save_result(test, result)
+
+    def record_retry(self, test: Test, result: TestResult):
+        self._retries[test.name] = self._retries.get(test.name, 0) + 1
         self._save_result(test, result)
 
     @contextmanager
@@ -346,6 +351,9 @@ class Output:
 
         self._print_result_counts()
 
+        if self._retries:
+            self._print_retries()
+
         if self._diff:
             self._print_diff_summary()
 
@@ -410,7 +418,16 @@ class Output:
             if count := counts.get(status, 0):
                 self.console.print(f"  [bold {style}]{label}[/bold {style}] {count}")
 
+        if total_retries := sum(self._retries.values()):
+            self.console.print(f"  [bold cyan]Retried[/bold cyan] {total_retries}")
+
         self.console.print(f"  [bold blue]Total Time[/bold blue] {self._duration}s")
+
+    def _print_retries(self):
+        self.console.print()
+        self.console.print(Rule(" Retries", align="left"))
+        for name, count in sorted(self._retries.items()):
+            self.console.print(f"  {name}  {count} {'attempt' if count == 1 else 'attempts'}")
 
     def _print_slowest(self):
         slowest = sorted(self._results, key=lambda r: r.duration, reverse=True)

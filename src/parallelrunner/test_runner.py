@@ -104,6 +104,16 @@ class TestRunner:
                     )
 
                     if test is not None:
+                        self.output.record_retry(
+                            test,
+                            TestResult.from_error(
+                                test.name,
+                                "supervisor died",
+                                0.0,
+                                datetime.now(),
+                            ),
+                        )
+
                         count = self._death_counts.get(test.name, 0) + 1
                         self._death_counts[test.name] = count
                         if count >= self.max_supervisor_restarts:
@@ -117,6 +127,7 @@ class TestRunner:
                                 ),
                             )
                         else:
+                            test.retry()
                             self.tests.append(test)
 
                 if not died:

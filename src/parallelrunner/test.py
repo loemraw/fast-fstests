@@ -54,3 +54,6 @@ class Test(ABC):
         stderr: bytes,
     ) -> TestResult:
         pass
+
+    def retry(self):
+        self._id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
