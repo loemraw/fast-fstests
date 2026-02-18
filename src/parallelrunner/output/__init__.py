@@ -11,6 +11,7 @@ from tempfile import TemporaryFile
 
 from rich.console import Console, Group, RenderableType
 from rich.live import Live
+from rich.markup import escape
 from rich.padding import Padding
 from rich.panel import Panel
 from rich.progress import (
@@ -156,7 +157,7 @@ class Output:
     def supervisor_died(self, supervisor: Supervisor, test_name: str | None = None):
         msg = f"  > [bold red]dead[/bold red] {supervisor}"
         if test_name is not None:
-            msg += f" [dim]was running {test_name}"
+            msg += f"  [dim]was running {test_name}"
         self._live_print(msg)
 
     # --- Test execution ---
@@ -313,7 +314,7 @@ class Output:
             parts.append(self._format_diff(result))
 
         if result.summary:
-            parts.append(f" [dim]{result.summary}")
+            parts.append(f" [dim]{escape(result.summary)}")
 
         self._live_print(*parts)
 
@@ -597,7 +598,7 @@ class Output:
                 parts.append(str(exc) or type(exc).__name__)
 
         for note in getattr(exc, "__notes__", []):
-            parts.append(f"[dim]{note}[/dim]")
+            parts.append(f"[dim]{escape(str(note))}[/dim]")
 
         return Panel.fit(
             Group(*parts),
