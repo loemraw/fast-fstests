@@ -54,17 +54,20 @@ def main():
         if config.test_selection.list:
             print(*[test.name for test in tests], sep="\n")
             return
-        assert len(tests) > 0, "no tests to run"
+        if not tests:
+            raise ValueError("no tests to run")
 
         mkosi_machines = list(MkosiSupervisor.from_config(config))
         if forces := config.mkosi.build:
             mkosi_machines[0].build(forces)
-        assert len(mkosi_machines) > 0, "no supervisors to run tests on"
+        if not mkosi_machines:
+            raise ValueError("no supervisors to run tests on")
 
-        assert (
-            config.test_runner.bpftrace is None
-            or config.test_runner.bpftrace_script is None
-        ), "cannot specify --bpftrace and --bpftrace-script"
+        if (
+            config.test_runner.bpftrace is not None
+            and config.test_runner.bpftrace_script is not None
+        ):
+            raise ValueError("cannot specify --bpftrace and --bpftrace-script")
 
         runner = TestRunner(
             tests,
@@ -80,7 +83,6 @@ def main():
         pass
     except Exception as e:
         output.print_exception(e)
-        raise
         sys.exit(1)
 
 

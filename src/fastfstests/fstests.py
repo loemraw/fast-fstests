@@ -16,9 +16,8 @@ logger = logging.getLogger(__name__)
 
 class FSTest(Test):
     def __init__(self, name: str, config: Config):
-        assert (mkosi_fstests := config.mkosi.fstests) is not None, (
-            "path to fstests for mkosi not defined"
-        )
+        if (mkosi_fstests := config.mkosi.fstests) is None:
+            raise ValueError("path to fstests for mkosi not defined")
 
         check_options: list[str] = []
         if (section := config.test_selection.section) is not None:
@@ -65,13 +64,14 @@ class FSTest(Test):
         )
 
 
-def assert_fstests(config: Config) -> Path:
-    assert config.fstests is not None, "path to fstests not defined"
+def get_fstests_path(config: Config) -> Path:
+    if config.fstests is None:
+        raise ValueError("path to fstests not defined")
     return config.fstests
 
 
 def expand_test(test: str, config: Config) -> Iterable[str]:
-    fstests = assert_fstests(config)
+    fstests = get_fstests_path(config)
     test_path = fstests.joinpath("tests", test)
     tests: list[str] = list(
         filter(
@@ -100,7 +100,7 @@ def parse_exclude_tests_file(config: Config) -> Iterable[str]:
 
 
 def get_tests_for_group(group: str, config: Config) -> Iterable[str]:
-    fstests = assert_fstests(config)
+    fstests = get_fstests_path(config)
 
     if "/" in group:
         test_dir, group = group.split("/")
@@ -170,9 +170,10 @@ def collect_tests(config: Config) -> Iterable[Test]:
         if not tests and prev_tests:
             logger.warning("no tests match your specified file system: %s", file_system)
 
-    assert config.test_selection.iterate >= 1, (
-        "test_selection iterate value must be greater than or equal to 1"
-    )
+    if config.test_selection.iterate < 1:
+        raise ValueError(
+            "test_selection iterate value must be greater than or equal to 1"
+        )
     if config.test_selection.iterate > 1:
         tests = [test for test in tests for _ in range(config.test_selection.iterate)]
 

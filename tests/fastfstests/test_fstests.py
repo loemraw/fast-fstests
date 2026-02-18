@@ -8,6 +8,7 @@ from fastfstests.fstests import (
     FSTest,
     collect_tests,
     expand_test,
+    get_fstests_path,
     get_tests_from_test_dir,
     parse_exclude_tests_file,
 )
@@ -15,7 +16,7 @@ from parallelrunner.test import TestStatus
 
 
 def make_config(
-    fstests_path: Path,
+    fstests_path: Path | None = None,
     mkosi_fstests: Path | None = None,
     **selection_kwargs,
 ) -> Config:
@@ -218,3 +219,25 @@ def test_collect_tests_exclude_group(fstests_dir: Path):
     names = sorted(t.name for t in tests)
     assert "btrfs/003" not in names
     assert "btrfs/001" in names
+
+
+# --- error handling ---
+
+
+def test_get_fstests_path_raises_without_path():
+    config = make_config()
+    with pytest.raises(ValueError, match="path to fstests not defined"):
+        get_fstests_path(config)
+
+
+def test_fstest_raises_without_mkosi_fstests():
+    config = make_config(Path("/fstests"), mkosi_fstests=None)
+    config.mkosi.fstests = None
+    with pytest.raises(ValueError, match="path to fstests for mkosi not defined"):
+        FSTest("btrfs/001", config)
+
+
+def test_collect_tests_iterate_validation(fstests_dir: Path):
+    config = make_config(fstests_dir, tests=["btrfs/001"], iterate=0)
+    with pytest.raises(ValueError, match="iterate"):
+        list(collect_tests(config))

@@ -30,11 +30,11 @@ class MkosiSupervisor(Supervisor):
             yield MkosiSupervisor(config, name)
 
     def __init__(self, config: Config, name: str):
-        assert config.mkosi.config is not None, "mkosi config path not specified"
+        if config.mkosi.config is None:
+            raise ValueError("mkosi config path not specified")
 
-        assert (mkosi_path := shutil.which("mkosi")) is not None, (
-            "mkosi not found on path"
-        )
+        if (mkosi_path := shutil.which("mkosi")) is None:
+            raise FileNotFoundError("mkosi not found on PATH")
         self.mkosi_path: str = mkosi_path
 
         self.config: Config = config
@@ -60,11 +60,8 @@ class MkosiSupervisor(Supervisor):
             build_command,
             cwd=self.config.mkosi.config,
         )
-        assert proc.returncode == 0, (
-            "build failed",
-            proc.returncode,
-            build_command,
-        )
+        if proc.returncode != 0:
+            raise subprocess.CalledProcessError(proc.returncode, build_command)
 
     @override
     async def __aenter__(self) -> Self:
@@ -80,13 +77,15 @@ class MkosiSupervisor(Supervisor):
             await asyncio.wait_for(self.wait_for_machine(), self.config.mkosi.timeout)
         except TimeoutError:
             self.__cleanup()
-            assert False, (
-                "timed out waiting for mkosi machine",
-                (await self.proc.stdout.read()).decode() if self.proc.stdout else "",
-                (await self.proc.stderr.read()).decode() if self.proc.stderr else "",
-            )
+            exc = TimeoutError("timed out waiting for mkosi machine")
+            if self.proc and self.proc.stdout:
+                exc.add_note(f"stdout: {(await self.proc.stdout.read()).decode()}")
+            if self.proc and self.proc.stderr:
+                exc.add_note(f"stderr: {(await self.proc.stderr.read()).decode()}")
+            raise exc
         except asyncio.CancelledError:
             self.__cleanup()
+            raise
         return self
 
     @override
@@ -215,18 +214,23 @@ class MkosiSupervisor(Supervisor):
 
     async def wait_for_machine(self):
         while True:
-            assert self.proc is not None and self.proc.returncode is None, (
-                "waiting for machine that is not running, make sure to build your image before running fast-fstests",
-                "it's important that the image was built using the same flags you pass into fast-fstests",
-                f"mkosi invocation: {self.mkosi_command}",
-                f"mkosi config path: {self.config.mkosi.config}",
-                f"mkosi stdout: {(await self.proc.stdout.read()).decode()}"
-                if self.proc is not None and self.proc.stdout is not None
-                else "no mkosi stdout",
-                f"mkosi stderr: {(await self.proc.stderr.read()).decode()}"
-                if self.proc is not None and self.proc.stderr is not None
-                else "no mkosi stderr",
-            )
+            if self.proc is None or self.proc.returncode is not None:
+                exc = RuntimeError("mkosi machine exited unexpectedly")
+                exc.add_note("make sure to build your image before running fast-fstests")
+                exc.add_note(
+                    "the image must be built using the same flags you pass into fast-fstests"
+                )
+                exc.add_note(f"mkosi invocation: {self.mkosi_command}")
+                exc.add_note(f"mkosi config path: {self.config.mkosi.config}")
+                if self.proc is not None and self.proc.stdout is not None:
+                    exc.add_note(
+                        f"mkosi stdout: {(await self.proc.stdout.read()).decode()}"
+                    )
+                if self.proc is not None and self.proc.stderr is not None:
+                    exc.add_note(
+                        f"mkosi stderr: {(await self.proc.stderr.read()).decode()}"
+                    )
+                raise exc
 
             with tempfile.TemporaryFile("wb+") as stdout:
                 with tempfile.TemporaryFile("wb+") as stderr:
