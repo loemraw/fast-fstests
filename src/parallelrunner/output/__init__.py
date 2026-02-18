@@ -156,7 +156,7 @@ class Output:
     def supervisor_died(self, supervisor: Supervisor, test_name: str | None = None):
         msg = f"  > [bold red]dead[/bold red] {supervisor}"
         if test_name is not None:
-            msg += f" [dim](was running {test_name})"
+            msg += f" [dim]was running {test_name}"
         self._live_print(msg)
 
     # --- Test execution ---
