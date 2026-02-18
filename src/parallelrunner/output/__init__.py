@@ -194,11 +194,9 @@ class Output:
             return
 
         path = self._get_test_path(test)
-        latest = self._get_latest_path(test)
+        self._link_latest(test)
         with open(path / "stdout", "wb+") as stdout:
-            self._link("stdout", path, latest)
             with open(path / "stderr", "wb+") as stderr:
-                self._link("stderr", path, latest)
                 yield stdout, stderr
 
     def finished_test(self, test: Test, result: TestResult):
@@ -218,11 +216,8 @@ class Output:
             return
 
         path = self._get_test_path(test)
-        latest = self._get_latest_path(test)
         with open(path / "bpftrace-stdout", "wb+") as stdout:
-            self._link("bpftrace-stdout", path, latest)
             with open(path / "bpftrace-stderr", "wb+") as stderr:
-                self._link("bpftrace-stderr", path, latest)
                 yield (stdout, stderr)
 
     @contextmanager
@@ -232,9 +227,7 @@ class Output:
             return
 
         path = self._get_test_path(test)
-        latest = self._get_latest_path(test)
         with open(path / "dmesg", "wb+") as f:
-            self._link("dmesg", path, latest)
             yield f
 
     # --- Result persistence ---
@@ -245,17 +238,15 @@ class Output:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _get_latest_path(self, test: Test) -> Path:
-        assert self.results_dir is not None
-        path = self.results_dir / "latest" / test.name
-        os.makedirs(path, exist_ok=True)
-        return path
-
-    def _link(self, filename: str, path: Path, destination: Path):
-        dest = destination / filename
-        if dest.is_file():
-            os.remove(dest)
-        os.symlink(path.absolute() / filename, dest)
+    def _link_latest(self, test: Test):
+        if self.results_dir is None:
+            return
+        test_path = self._get_test_path(test)
+        latest_link = self.results_dir / "latest" / test.name
+        if latest_link.is_symlink():
+            latest_link.unlink()
+        os.makedirs(latest_link.parent, exist_ok=True)
+        os.symlink(os.path.relpath(test_path, latest_link.parent), latest_link)
 
     def _reset_latest(self):
         if self.results_dir is None:
@@ -271,23 +262,11 @@ class Output:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def link_artifacts(self, test: Test):
-        if self.results_dir is None:
-            return
-        path = self._get_test_path(test) / "artifacts"
-        if not path.exists():
-            return
-        latest = self._get_latest_path(test) / "artifacts"
-        os.makedirs(latest, exist_ok=True)
-        for name in os.listdir(path):
-            self._link(name, path, latest)
-
     def _save_result(self, test: Test, result: TestResult):
         if self.results_dir is None:
             return
 
         path = self._get_test_path(test)
-        latest = self._get_latest_path(test)
 
         for name, value in [
             ("retcode", str(result.retcode)),
@@ -295,7 +274,6 @@ class Output:
             ("status", result.status.name),
         ]:
             _ = path.joinpath(name).write_text(value)
-            self._link(name, path, latest)
 
     # --- Console output ---
 
