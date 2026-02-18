@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import time
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -99,41 +100,63 @@ class Output:
         live = Live(Group(individual, overall), console=self.console)
         return live, individual, overall, task_id
 
+    def _live_print(self, *args: object):
+        """Print while Live display is active.
+
+        Forces a refresh first so the Live display's internal line count
+        matches the current number of progress tasks, preventing stale
+        cursor positioning that leaves ghost spinner lines in scrollback.
+        """
+        self._test_live.refresh()
+        self.console.print(*args)
+
     # --- Supervisor lifecycle ---
 
     @contextmanager
     def spawning_supervisor(self, supervisor: Supervisor):
-        task_id = self._test_progress.add_task(f"▸ spawning {supervisor!r}")
+        task_id = self._test_progress.add_task(f"> spawning {supervisor!r}")
         failed = False
+        start = time.monotonic()
         try:
             yield
         except BaseException:
             failed = True
             raise
         finally:
+            duration = timedelta(seconds=int(time.monotonic() - start))
             self._test_progress.remove_task(task_id)
             if failed:
-                self.console.print(f"  ▸ [bold red]failed[/bold red] {supervisor}")
+                self._live_print(f"  > [bold red]failed[/bold red] {supervisor} [yellow]{duration}")
             else:
-                self.console.print(f"  ▸ [bold green]spawn[/bold green] {supervisor}")
+                self._live_print(f"  > [bold green]spawn[/bold green] {supervisor} [yellow]{duration}")
 
     @contextmanager
     def respawning_supervisor(self, supervisor: Supervisor):
-        task_id = self._test_progress.add_task(f"▸ respawning {supervisor!r}")
+        task_id = self._test_progress.add_task(f"> respawning {supervisor!r}")
+        start = time.monotonic()
         try:
             yield
         finally:
+            duration = timedelta(seconds=int(time.monotonic() - start))
             self._test_progress.remove_task(task_id)
-            self.console.print(f"  ▸ [bold green]respawn[/bold green] {supervisor}")
+            self._live_print(f"  > [bold green]respawn[/bold green] {supervisor} [yellow]{duration}")
 
-    def exited_supervisor(self, supervisor: Supervisor):
-        self.console.print(f"  ▸ [bold green]exit[/bold green] {supervisor}")
+    @contextmanager
+    def exiting_supervisor(self, supervisor: Supervisor):
+        task_id = self._test_progress.add_task(f"> exiting {supervisor!r}")
+        start = time.monotonic()
+        try:
+            yield
+        finally:
+            duration = timedelta(seconds=int(time.monotonic() - start))
+            self._test_progress.remove_task(task_id)
+            self._live_print(f"  > [bold green]exit[/bold green] {supervisor} [yellow]{duration}")
 
     def supervisor_died(self, supervisor: Supervisor, test_name: str | None = None):
-        msg = f"  ▸ [bold red]dead[/bold red] {supervisor}"
+        msg = f"  > [bold red]dead[/bold red] {supervisor}"
         if test_name is not None:
             msg += f" [dim](was running {test_name})"
-        self.console.print(msg)
+        self._live_print(msg)
 
     # --- Test execution ---
 
@@ -286,7 +309,7 @@ class Output:
         if result.summary:
             parts.append(f"[dim]{result.summary}")
 
-        self.console.print(*parts)
+        self._live_print(*parts)
 
     def _format_diff(self, result: TestResult) -> str:
         baseline = self._baseline.get(result.name)

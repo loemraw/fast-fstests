@@ -1,9 +1,10 @@
 import asyncio
 import logging
 import sys
+import time
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .output import Output
@@ -133,8 +134,8 @@ class TestRunner:
                     return
         finally:
             if not self.keep_alive:
-                await supervisor.__aexit__(None, None, None)
-                self.output.exited_supervisor(supervisor)
+                with self.output.exiting_supervisor(supervisor):
+                    await supervisor.__aexit__(None, None, None)
 
     async def _run_tests_then_cancel(
         self,
