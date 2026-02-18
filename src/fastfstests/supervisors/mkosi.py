@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import random
-import shlex
 import shutil
 import string
 import subprocess
@@ -189,8 +188,8 @@ class MkosiSupervisor(Supervisor):
             command,
             cwd=self.config.mkosi.config,
             stdin=DEVNULL,
-            stdout=stdout,
-            stderr=stderr,
+            stdout=stdout or DEVNULL,
+            stderr=stderr or DEVNULL,
         )
 
     async def run_command(
@@ -254,19 +253,53 @@ class MkosiSupervisor(Supervisor):
     @override
     async def collect_artifacts(self, test: Test, dest: Path):
         if not test.artifact_paths:
+            logger.debug("no artifact paths defined for test %s", test.name)
             return
-        logger.debug(f"collecting artifacts for test {test}")
-        paths = " ".join(shlex.quote(str(p)) for p in test.artifact_paths)
-        with tempfile.TemporaryFile("wb+") as f:
-            retcode = await self.run_command(
-                f"tar -cf - {paths} 2>/dev/null", 10, stdout=f
-            )
-            if retcode is None or retcode != 0:
-                return
-            _ = f.seek(0)
-            with tarfile.open(fileobj=f) as tar:
-                for member in tar.getmembers():
-                    if member.isfile():
-                        data = tar.extractfile(member)
-                        if data:
-                            _ = (dest / Path(member.name).name).write_bytes(data.read())
+
+        paths = " ".join(str(p) for p in test.artifact_paths)
+        logger.debug("collecting artifacts for %s, patterns: %s", test.name, paths)
+
+        # globstar must be enabled for ** expansion — use bash -O globstar
+        cmd = f"bash -O globstar -c 'tar -cf - {paths} 2>/dev/null'"
+
+        with tempfile.TemporaryFile("wb+") as stderr_f:
+            with tempfile.TemporaryFile("wb+") as f:
+                retcode = await self.run_command(cmd, 10, stdout=f, stderr=stderr_f)
+
+                if retcode is None:
+                    logger.warning(
+                        "artifact collection timed out for %s", test.name
+                    )
+                    return
+                if retcode != 0:
+                    _ = stderr_f.seek(0)
+                    cmd_stderr = stderr_f.read().decode(errors="replace").strip()
+                    logger.warning(
+                        "artifact collection failed for %s (rc=%d): %s",
+                        test.name,
+                        retcode,
+                        cmd_stderr or "(no stderr)",
+                    )
+
+                _ = f.seek(0)
+                if f.read(1) == b"":
+                    logger.debug("no artifacts found for %s", test.name)
+                    return
+                _ = f.seek(0)
+
+                collected: list[str] = []
+                with tarfile.open(fileobj=f) as tar:
+                    for member in tar.getmembers():
+                        if member.isfile():
+                            data = tar.extractfile(member)
+                            if data:
+                                name = Path(member.name).name
+                                _ = (dest / name).write_bytes(data.read())
+                                collected.append(name)
+
+                logger.debug(
+                    "collected %d artifacts for %s: %s",
+                    len(collected),
+                    test.name,
+                    ", ".join(collected),
+                )
