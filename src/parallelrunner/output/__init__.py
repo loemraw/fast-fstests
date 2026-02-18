@@ -350,10 +350,10 @@ class Output:
         if self._print_duration_hist:
             self._print_time_histogram()
 
-        self._print_result_counts()
-
         if self._retries:
             self._print_retries()
+
+        self._print_result_counts()
 
         if self._diff:
             self._print_diff_summary()
