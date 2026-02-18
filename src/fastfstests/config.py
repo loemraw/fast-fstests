@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Annotated
 
 import tyro
-from tyro.conf import OmitArgPrefixes, OmitSubcommandPrefixes, Positional, UseCounterAction, arg, subcommand
+from tyro.conf import (
+    OmitArgPrefixes,
+    Positional,
+    UseCounterAction,
+    arg,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +189,6 @@ class OutputOptions:
             raise ValueError("--record requires --results-dir to be set")
 
 
-
 @dataclass
 class TestRunnerOptions:
     keep_alive: Annotated[bool, arg(help_behavior_hint=hbh)] = False
@@ -208,7 +212,9 @@ class TestRunnerOptions:
     probe_interval: Annotated[int, arg(metavar="SECONDS", help_behavior_hint=hbh)] = 30
     """seconds between liveness probes to check if hosts are still sshable (0 to disable)"""
 
-    max_supervisor_restarts: Annotated[int, arg(metavar="N", help_behavior_hint=hbh)] = 3
+    max_supervisor_restarts: Annotated[
+        int, arg(metavar="N", help_behavior_hint=hbh)
+    ] = 3
     """max times a test can kill a supervisor before being marked as error (0 to disable restarts)"""
 
     dmesg: Annotated[bool, arg(help_behavior_hint=hbh)] = True
@@ -245,15 +251,5 @@ class CompareConfig:
     b: int | str = -1
     """recording label or negative index (-1 = most recent)"""
 
-    results_dir: Annotated[Path, arg(metavar="PATH")] = Path("results")
+    results_dir: Annotated[Path, arg(metavar="PATH")] = tyro.MISSING
     """path to results directory"""
-
-
-@dataclass
-class Config:
-    """fast-fstests is an fstests wrapper that parallelizes test execution with vms"""
-
-    command: OmitSubcommandPrefixes[
-        Annotated[RunConfig, subcommand("run")]
-        | Annotated[CompareConfig, subcommand("compare")]
-    ] = field(default_factory=RunConfig)

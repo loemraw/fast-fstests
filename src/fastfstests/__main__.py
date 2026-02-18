@@ -4,46 +4,76 @@ import os
 import sys
 import tomllib
 from pathlib import Path
+from typing import cast
 
 import tyro
 from mashumaro.codecs.toml import toml_decode
 from rich.console import Console
-from tyro.conf import CascadeSubcommandArgs
+from tyro._singleton import NonpropagatingMissingType
 
 from parallelrunner.output import Output
 from parallelrunner.recording import load_recording, print_comparison
 from parallelrunner.test_runner import TestRunner
 
-from .config import CompareConfig, Config, RunConfig
+from .config import CompareConfig, RunConfig
 from .fstests import collect_tests
 from .supervisors.mkosi import MkosiSupervisor
 
 logger = logging.getLogger(__name__)
+
+_NonpropagatingMissingType = cast(NonpropagatingMissingType, tyro.MISSING_NONPROP)
 
 
 def main():
     logging.basicConfig()
 
     config_path = os.getenv("FAST_FSTESTS_CONFIG_PATH") or "config.toml"
-    default_run_config = None
+
+    default_compare_config = _NonpropagatingMissingType
+    try:
+        with open(config_path, "rb") as f:
+            raw = tomllib.load(f)
+        if results_dir := cast(str, raw.get("output", {}).get("results_dir")):
+            default_compare_config = CompareConfig(results_dir=Path(results_dir))
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        pass
+
+    if len(sys.argv) > 1 and sys.argv[1] == "compare":
+        config = tyro.cli(
+            CompareConfig,
+            args=sys.argv[2:],
+            prog="ff compare",
+            default=default_compare_config,
+        )
+        compare(config)
+        return
+
+    default_config = _NonpropagatingMissingType
     try:
         with open(config_path, "r") as f:
-            default_run_config = toml_decode(f.read(), RunConfig)
+            default_config = toml_decode(f.read(), RunConfig)
     except FileNotFoundError:
         logger.warning("can't find configuration file %s", config_path)
     except tomllib.TOMLDecodeError:
         logger.exception("unable to parse configuration file %s", config_path)
 
-    default_config = Config(command=default_run_config) if default_run_config else None
-    config = tyro.cli(
-        Config, default=default_config, prog="ff", config=(CascadeSubcommandArgs,)
-    )
+    try:
+        config = tyro.cli(RunConfig, default=default_config, prog="ff")
+    except SystemExit as e:
+        if e.code == 0:
+            # Help was printed — append compare help
+            try:
+                _ = tyro.cli(
+                    CompareConfig,
+                    args=["--help"],
+                    prog="ff compare",
+                    default=default_compare_config,
+                )
+            except SystemExit:
+                pass
+        raise
 
-    match config.command:
-        case RunConfig():
-            run(config.command)
-        case CompareConfig():
-            compare(config.command)
+    run(config)
 
 
 def run(config: RunConfig):
