@@ -43,6 +43,20 @@ def hbh(hint: str) -> str:
     return f"(default: {hint})"
 
 
+OptionalLabelOrIndex = Annotated[
+    int | str | None,
+    tyro.constructors.PrimitiveConstructorSpec(
+        nargs="?",
+        metavar="LABEL",
+        instance_from_str=lambda args: int(args[0])
+        if args and args[0] and args[0].lstrip("-").isdigit()
+        else (args[0] if args and args[0] else ""),
+        is_instance=lambda instance: isinstance(instance, (int, str)) or instance is None,
+        str_from_instance=lambda instance: [str(instance)] if instance is not None else [],
+    ),
+]
+
+
 @dataclass
 class TestSelectionOptions:
     tests: Annotated[
@@ -101,8 +115,8 @@ class TestSelectionOptions:
     ] = None
     """specify file system to be tested"""
 
-    slowest_first: Annotated[bool, arg(help_behavior_hint=hbh)] = False
-    """sort tests slowest-first using duration data from previous runs"""
+    slowest_first: OptionalLabelOrIndex = None
+    """sort tests slowest-first using duration data (no arg: latest, label: recording, negative int: recording index)"""
 
 
 @dataclass

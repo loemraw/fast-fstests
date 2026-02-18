@@ -108,7 +108,7 @@ def test_sort_by_duration(tmp_path: Path):
         FSTest("btrfs/003", config),
     ]
 
-    sorted_tests = sort_by_duration(tests, tmp_path)
+    sorted_tests = sort_by_duration(tests, "", tmp_path)
     names = [t.name for t in sorted_tests]
     # Ascending by duration: pop() will take slowest first
     assert names == ["btrfs/001", "btrfs/003", "btrfs/002"]
@@ -129,7 +129,7 @@ def test_sort_by_duration_unknown_tests_last(tmp_path: Path):
         FSTest("btrfs/002", config),  # no duration data
     ]
 
-    sorted_tests = sort_by_duration(tests, tmp_path)
+    sorted_tests = sort_by_duration(tests, "", tmp_path)
     names = [t.name for t in sorted_tests]
     # Unknown (inf) sorts to end, popped first
     assert names == ["btrfs/001", "btrfs/002"]
@@ -141,9 +141,28 @@ def test_sort_by_duration_no_latest(tmp_path: Path):
     config = make_config(Path("/fstests"))
     tests = [FSTest("btrfs/001", config), FSTest("btrfs/002", config)]
 
-    sorted_tests = sort_by_duration(tests, tmp_path)
+    sorted_tests = sort_by_duration(tests, "", tmp_path)
     # No latest/ — returns unchanged
     assert [t.name for t in sorted_tests] == [t.name for t in tests]
+
+
+def test_sort_by_duration_from_recording(tmp_path: Path):
+    from fastfstests.__main__ import sort_by_duration
+
+    # Create a recording with duration data
+    rec = tmp_path / "recordings" / "baseline"
+    for name, duration in [("btrfs/001", "10.0"), ("btrfs/002", "1.0")]:
+        d = rec / name
+        d.mkdir(parents=True)
+        _ = (d / "duration").write_text(duration)
+        _ = (d / "status").write_text("PASS")
+
+    config = make_config(Path("/fstests"))
+    tests = [FSTest("btrfs/001", config), FSTest("btrfs/002", config)]
+
+    sorted_tests = sort_by_duration(tests, "baseline", tmp_path)
+    names = [t.name for t in sorted_tests]
+    assert names == ["btrfs/002", "btrfs/001"]
 
 
 def test_make_result_skip():

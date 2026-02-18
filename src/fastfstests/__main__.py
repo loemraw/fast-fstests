@@ -12,7 +12,12 @@ from rich.console import Console
 from tyro._singleton import NonpropagatingMissingType
 
 from parallelrunner.output import Output
-from parallelrunner.recording import load_recording, print_comparison
+from parallelrunner.recording import (
+    list_recordings,
+    load_recording,
+    print_comparison,
+    resolve_recording,
+)
 from parallelrunner.test import Test
 from parallelrunner.test_runner import TestRunner
 
@@ -104,12 +109,14 @@ def run(config: RunConfig):
         if not tests:
             raise ValueError("no tests to run")
 
-        if config.test_selection.slowest_first:
+        if config.test_selection.slowest_first is not None:
             if config.output.results_dir is None:
                 raise ValueError("--slowest-first requires --results-dir")
             if config.test_selection.randomize:
                 raise ValueError("--slowest-first and --randomize are mutually exclusive")
-            tests = sort_by_duration(tests, config.output.results_dir)
+            tests = sort_by_duration(
+                tests, config.test_selection.slowest_first, config.output.results_dir
+            )
 
         mkosi_machines = list(MkosiSupervisor.from_config(config))
         if forces := config.mkosi.build:
@@ -142,27 +149,35 @@ def run(config: RunConfig):
         sys.exit(1)
 
 
-def sort_by_duration(tests: list[Test], results_dir: Path) -> list[Test]:
-    latest = results_dir / "latest"
-    if not latest.exists():
-        logger.warning("no previous results found for --slowest-first, using default order")
-        return tests
+def sort_by_duration(
+    tests: list[Test], source: int | str, results_dir: Path
+) -> list[Test]:
+    if source == "":
+        # No label — use latest/
+        duration_dir = results_dir / "latest"
+        if not duration_dir.exists():
+            logger.warning(
+                "no previous results found for --slowest-first, using default order"
+            )
+            return tests
+    else:
+        # Label or negative index — resolve from recordings/
+        duration_dir, _ = resolve_recording(source, results_dir)
 
-    durations = load_recording(latest)
+        if not duration_dir.exists():
+            available = list_recordings(results_dir)
+            msg = f"recording not found: {source}"
+            if available:
+                msg += f" (available: {', '.join(available)})"
+            raise ValueError(msg)
+
+    durations = load_recording(duration_dir)
     return sorted(
         tests,
-        key=lambda t: durations[t.name].duration if t.name in durations else float("inf"),
+        key=lambda t: durations[t.name].duration
+        if t.name in durations
+        else float("inf"),
     )
-
-
-def resolve_recording(value: int | str, rec_dir: Path) -> tuple[Path, str]:
-    match value:
-        case int():
-            recordings = sorted(rec_dir.iterdir(), key=lambda p: p.stat().st_mtime)
-            path = recordings[value]
-            return path, path.name
-        case str():
-            return rec_dir / value, value
 
 
 def compare(config: CompareConfig):
@@ -175,11 +190,9 @@ def compare(config: CompareConfig):
         sys.exit(1)
 
     try:
-        a_path, a_label = resolve_recording(config.a, rec_dir)
-        b_path, b_label = resolve_recording(config.b, rec_dir)
+        a_path, a_label = resolve_recording(config.a, config.results_dir)
+        b_path, b_label = resolve_recording(config.b, config.results_dir)
     except (IndexError, FileNotFoundError):
-        from parallelrunner.recording import list_recordings
-
         available = list_recordings(config.results_dir)
         console.print("[red]Recording not found.[/red]")
         if available:
