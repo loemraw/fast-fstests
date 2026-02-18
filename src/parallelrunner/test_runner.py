@@ -195,7 +195,7 @@ class TestRunner:
             if stdout is None:
                 yield
                 return
-            async with supervisor.trace("dmesg -w", stdout, None):
+            async with supervisor.trace("dmesg -W", stdout, None):
                 yield
 
     # --- Probe ---
