@@ -58,6 +58,7 @@ fast-fstests --help
 | `iterate`           | int          | `--iterate`, `-i`               | Number of times to run each test.           |
 | `list`              | bool         | `--list`, `-l`                  | List tests without running any.             |
 | `file_system`       | str          | `--file-system`                 | Specify file system to be tested (equivalent to -btrfs or -xfs for ./check) |
+| `slowest_first`     | bool         | `--slowest-first`               | Sort tests slowest-first using duration data from previous runs. Requires `--results-dir`. |
 
 ### `[test_runner]` Section
 | Option      | Type      | CLI Argument(s)         | Description                                 |

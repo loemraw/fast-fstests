@@ -13,6 +13,7 @@ from tyro._singleton import NonpropagatingMissingType
 
 from parallelrunner.output import Output
 from parallelrunner.recording import load_recording, print_comparison
+from parallelrunner.test import Test
 from parallelrunner.test_runner import TestRunner
 
 from .config import CompareConfig, RunConfig
@@ -103,6 +104,13 @@ def run(config: RunConfig):
         if not tests:
             raise ValueError("no tests to run")
 
+        if config.test_selection.slowest_first:
+            if config.output.results_dir is None:
+                raise ValueError("--slowest-first requires --results-dir")
+            if config.test_selection.randomize:
+                raise ValueError("--slowest-first and --randomize are mutually exclusive")
+            tests = sort_by_duration(tests, config.output.results_dir)
+
         mkosi_machines = list(MkosiSupervisor.from_config(config))
         if forces := config.mkosi.build:
             mkosi_machines[0].build(forces)
@@ -132,6 +140,19 @@ def run(config: RunConfig):
     except Exception as e:
         output.print_exception(e)
         sys.exit(1)
+
+
+def sort_by_duration(tests: list[Test], results_dir: Path) -> list[Test]:
+    latest = results_dir / "latest"
+    if not latest.exists():
+        logger.warning("no previous results found for --slowest-first, using default order")
+        return tests
+
+    durations = load_recording(latest)
+    return sorted(
+        tests,
+        key=lambda t: durations[t.name].duration if t.name in durations else float("inf"),
+    )
 
 
 def resolve_recording(value: int | str, rec_dir: Path) -> tuple[Path, str]:

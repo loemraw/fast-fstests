@@ -101,6 +101,9 @@ class TestSelectionOptions:
     ] = None
     """specify file system to be tested"""
 
+    slowest_first: Annotated[bool, arg(help_behavior_hint=hbh)] = False
+    """sort tests slowest-first using duration data from previous runs"""
+
 
 @dataclass
 class MkosiOptions:
