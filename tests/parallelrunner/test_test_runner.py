@@ -332,3 +332,85 @@ def test_max_restarts_exceeded(output: Output):
     # The test should have been attempted but ultimately get ERROR status
     # (killed supervisor 1 time = max, so it's marked as error on first death)
     assert supervisor.enter_count >= 1
+
+
+class FailThenPassSupervisor(MockSupervisor):
+    """Supervisor that fails tests N times before passing them."""
+
+    def __init__(self, fail_count: int = 1, **kwargs: object):
+        super().__init__(**kwargs)
+        self._fail_count = fail_count
+        self._attempt_counts: dict[str, int] = {}
+
+    @override
+    async def run_test(
+        self,
+        test: Test,
+        timeout: int | None,
+        stdout: IO[bytes],
+        stderr: IO[bytes],
+    ) -> TestResult:
+        if self._test_delay > 0:
+            await asyncio.sleep(self._test_delay)
+        self.tests_run.append(test.name)
+        attempts = self._attempt_counts.get(test.name, 0) + 1
+        self._attempt_counts[test.name] = attempts
+        if attempts <= self._fail_count:
+            return TestResult(
+                test.name, test.id, TestStatus.FAIL, 0.1, datetime.now(),
+                None, 1, b"", b"",
+            )
+        return test.make_result(0.1, 0, b"", b"", )
+
+
+class AlwaysFailSupervisor(MockSupervisor):
+    """Supervisor where every test fails."""
+
+    @override
+    async def run_test(
+        self,
+        test: Test,
+        timeout: int | None,
+        stdout: IO[bytes],
+        stderr: IO[bytes],
+    ) -> TestResult:
+        self.tests_run.append(test.name)
+        return TestResult(
+            test.name, test.id, TestStatus.FAIL, 0.1, datetime.now(),
+            None, 1, b"", b"",
+        )
+
+
+def test_failure_retry_requeues_test(output: Output):
+    """Failed test is re-queued and passes on retry."""
+    supervisor = FailThenPassSupervisor(fail_count=1)
+    tests = make_tests(2)
+    runner = TestRunner(tests, [supervisor], output, retry_failures=3)
+
+    asyncio.run(runner.run())
+
+    # Both tests fail once then pass = 4 total runs
+    assert sorted(supervisor.tests_run) == ["test/000", "test/000", "test/001", "test/001"]
+
+
+def test_failure_retry_exhausted(output: Output):
+    """Test that always fails exhausts retries and records FAIL."""
+    supervisor = AlwaysFailSupervisor()
+    tests = make_tests(1)
+    runner = TestRunner(tests, [supervisor], output, retry_failures=2)
+
+    asyncio.run(runner.run())
+
+    # 1 original + 2 retries = 3 runs
+    assert len(supervisor.tests_run) == 3
+
+
+def test_failure_retry_disabled(output: Output):
+    """With retry_failures=0, failed tests are not retried."""
+    supervisor = AlwaysFailSupervisor()
+    tests = make_tests(1)
+    runner = TestRunner(tests, [supervisor], output, retry_failures=0)
+
+    asyncio.run(runner.run())
+
+    assert len(supervisor.tests_run) == 1

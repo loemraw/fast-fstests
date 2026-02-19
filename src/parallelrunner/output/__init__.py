@@ -57,6 +57,7 @@ class Output:
 
         self._results: list[TestResult] = []
         self._crash_reschedules: dict[str, int] = {}
+        self._failure_retries: dict[str, int] = {}
         self._duration: int = 0
 
         test_progress = self._create_test_progress()
@@ -201,6 +202,11 @@ class Output:
         self._crash_reschedules[test.name] = self._crash_reschedules.get(test.name, 0) + 1
         self._save_result(test, result)
 
+    def record_failure_retry(self, test: Test, result: TestResult):
+        self._failure_retries[test.name] = self._failure_retries.get(test.name, 0) + 1
+        self._print_result(test, result)
+        self._save_result(test, result)
+
     @contextmanager
     def log_bpftrace(self, test: Test):
         if self.results_dir is None:
@@ -275,6 +281,10 @@ class Output:
         if crash_reschedules > 0:
             _ = path.joinpath("crash_reschedules").write_text(str(crash_reschedules))
 
+        failure_retries = self._failure_retries.get(test.name, 0)
+        if failure_retries > 0:
+            _ = path.joinpath("failure_retries").write_text(str(failure_retries))
+
     # --- Console output ---
 
     def _print_result(self, test: Test, result: TestResult):
@@ -309,6 +319,9 @@ class Output:
 
         if self._crash_reschedules:
             self._print_crash_reschedules()
+
+        if self._failure_retries:
+            self._print_failure_retries()
 
         self._print_result_counts()
 
@@ -372,12 +385,21 @@ class Output:
         if total := sum(self._crash_reschedules.values()):
             self.console.print(f"  [bold cyan]Crash Rescheduled[/bold cyan] {total}")
 
+        if total := sum(self._failure_retries.values()):
+            self.console.print(f"  [bold cyan]Failure Retried[/bold cyan] {total}")
+
         self.console.print(f"  [bold blue]Total Time[/bold blue] {self._duration}s")
 
     def _print_crash_reschedules(self):
         self.console.print()
         self.console.print(Rule(" Crash Reschedules", align="left"))
         for name, count in sorted(self._crash_reschedules.items()):
+            self.console.print(f"  {name}  {count}")
+
+    def _print_failure_retries(self):
+        self.console.print()
+        self.console.print(Rule(" Failure Retries", align="left"))
+        for name, count in sorted(self._failure_retries.items()):
             self.console.print(f"  {name}  {count}")
 
     def _print_slowest(self):

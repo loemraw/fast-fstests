@@ -13,6 +13,7 @@ class RecordedResult:
     status: TestStatus
     duration: float
     crash_reschedules: int = 0
+    failure_retries: int = 0
 
 
 def _read_result(test_dir: Path) -> RecordedResult | None:
@@ -21,10 +22,12 @@ def _read_result(test_dir: Path) -> RecordedResult | None:
     if not status_file.exists() or not duration_file.exists():
         return None
     cr_file = test_dir / "crash_reschedules"
+    fr_file = test_dir / "failure_retries"
     return RecordedResult(
         status=TestStatus[status_file.read_text().strip()],
         duration=float(duration_file.read_text().strip()),
         crash_reschedules=int(cr_file.read_text().strip()) if cr_file.exists() else 0,
+        failure_retries=int(fr_file.read_text().strip()) if fr_file.exists() else 0,
     )
 
 
@@ -92,6 +95,7 @@ def print_comparison(
     removed_tests: list[str] = []
     timing: list[tuple[str, int]] = []
     crash_rescheduled: list[tuple[str, int, int]] = []
+    failure_retried: list[tuple[str, int, int]] = []
 
     for name in all_tests:
         ra, rb = a.get(name), b.get(name)
@@ -99,6 +103,8 @@ def print_comparison(
             new_tests.append(name)
             if rb is not None and rb.crash_reschedules > 0:
                 crash_rescheduled.append((name, 0, rb.crash_reschedules))
+            if rb is not None and rb.failure_retries > 0:
+                failure_retried.append((name, 0, rb.failure_retries))
             continue
         if rb is None:
             removed_tests.append(name)
@@ -119,6 +125,9 @@ def print_comparison(
         if ra.crash_reschedules != rb.crash_reschedules or rb.crash_reschedules > 0:
             crash_rescheduled.append((name, ra.crash_reschedules, rb.crash_reschedules))
 
+        if ra.failure_retries != rb.failure_retries or rb.failure_retries > 0:
+            failure_retried.append((name, ra.failure_retries, rb.failure_retries))
+
     console.print()
     console.print(Rule(f" {label_a} vs {label_b}", align="left"))
 
@@ -135,6 +144,11 @@ def print_comparison(
     if crash_rescheduled:
         console.print(f"  [bold yellow]Crash Rescheduled[/bold yellow] {len(crash_rescheduled)}")
         for name, count_a, count_b in crash_rescheduled:
+            console.print(f"    {name}  {count_a} → {count_b}")
+
+    if failure_retried:
+        console.print(f"  [bold yellow]Failure Retried[/bold yellow] {len(failure_retried)}")
+        for name, count_a, count_b in failure_retried:
             console.print(f"    {name}  {count_a} → {count_b}")
 
     if new_tests:
@@ -157,7 +171,7 @@ def print_comparison(
             color = "red" if delta > 0 else "green"
             console.print(f"    [{color}]{sign}{delta}s[/{color}]  {name}")
 
-    if not regressions and not fixes and not new_tests and not removed_tests and not timing and not crash_rescheduled:
+    if not regressions and not fixes and not new_tests and not removed_tests and not timing and not crash_rescheduled and not failure_retried:
         console.print("  No differences found.")
 
     console.print()

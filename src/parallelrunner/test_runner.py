@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .output import Output
 from .supervisor import Supervisor, SupervisorExited
-from .test import Test, TestResult
+from .test import Test, TestResult, TestStatus
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class TestRunner:
         probe_interval: int = 0,
         max_supervisor_restarts: int = 3,
         dmesg: bool = False,
+        retry_failures: int = 0,
     ):
         self.tests: list[Test] = list(tests)
         self.supervisors: list[Supervisor] = list(supervisors)
@@ -35,8 +36,10 @@ class TestRunner:
         self.probe_interval: int = probe_interval
         self.max_supervisor_restarts: int = max_supervisor_restarts
         self.dmesg: bool = dmesg
+        self.retry_failures: int = retry_failures
 
         self._death_counts: dict[str, int] = {}
+        self._failure_retry_counts: dict[str, int] = {}
         self._tests_in_flight: int = 0
         self._work_or_done: asyncio.Event = asyncio.Event()
 
@@ -201,6 +204,16 @@ class TestRunner:
         artifact_path = self.output.get_artifact_path(test)
         if artifact_path is not None:
             await supervisor.collect_artifacts(test, artifact_path)
+
+        if result.status == TestStatus.FAIL and self.retry_failures > 0:
+            count = self._failure_retry_counts.get(test.name, 0) + 1
+            if count <= self.retry_failures:
+                self._failure_retry_counts[test.name] = count
+                self.output.record_failure_retry(test, result)
+                test.reschedule()
+                self.tests.append(test)
+                return
+
         self.output.finished_test(test, result)
 
     @asynccontextmanager
