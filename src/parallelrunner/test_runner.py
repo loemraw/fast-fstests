@@ -99,11 +99,14 @@ class TestRunner:
                 except* (SupervisorExited, OSError):
                     died = True
                     test = current_test[0]
-                    self.output.supervisor_died(
-                        supervisor, test.name if test is not None else None
-                    )
 
                     if test is not None:
+                        count = self._death_counts.get(test.name, 0) + 1
+                        self._death_counts[test.name] = count
+
+                        self.output.supervisor_died(
+                            supervisor, test.name, count
+                        )
                         self.output.record_crash_reschedule(
                             test,
                             TestResult.from_error(
@@ -115,8 +118,6 @@ class TestRunner:
                             ),
                         )
 
-                        count = self._death_counts.get(test.name, 0) + 1
-                        self._death_counts[test.name] = count
                         if count >= self.max_supervisor_restarts:
                             self.output.finished_test(
                                 test,
@@ -131,6 +132,8 @@ class TestRunner:
                         else:
                             test.reschedule()
                             self.tests.append(test)
+                    else:
+                        self.output.supervisor_died(supervisor)
 
                 if not died:
                     return  # Normal completion

@@ -137,10 +137,17 @@ class Output:
             self._test_progress.remove_task(task_id)
             self._live_print(f"  > [bold green]exit[/bold green] {supervisor} [yellow]{duration}")
 
-    def supervisor_died(self, supervisor: Supervisor, test_name: str | None = None):
+    def supervisor_died(
+        self,
+        supervisor: Supervisor,
+        test_name: str | None = None,
+        crash_count: int | None = None,
+    ):
         msg = f"  > [bold red]dead[/bold red] {supervisor}"
         if test_name is not None:
             msg += f"  [dim]was running {test_name}"
+            if crash_count is not None:
+                msg += f" ({crash_count}{'st' if crash_count == 1 else 'nd' if crash_count == 2 else 'rd' if crash_count == 3 else 'th'} crash)"
         self._live_print(msg)
 
     # --- Test execution ---
