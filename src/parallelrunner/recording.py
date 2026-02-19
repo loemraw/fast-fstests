@@ -12,7 +12,7 @@ from .test import TestStatus
 class RecordedResult:
     status: TestStatus
     duration: float
-    retries: int = 0
+    crash_reschedules: int = 0
 
 
 def _read_result(test_dir: Path) -> RecordedResult | None:
@@ -20,11 +20,11 @@ def _read_result(test_dir: Path) -> RecordedResult | None:
     duration_file = test_dir / "duration"
     if not status_file.exists() or not duration_file.exists():
         return None
-    retries_file = test_dir / "retries"
+    cr_file = test_dir / "crash_reschedules"
     return RecordedResult(
         status=TestStatus[status_file.read_text().strip()],
         duration=float(duration_file.read_text().strip()),
-        retries=int(retries_file.read_text().strip()) if retries_file.exists() else 0,
+        crash_reschedules=int(cr_file.read_text().strip()) if cr_file.exists() else 0,
     )
 
 
@@ -90,14 +90,14 @@ def print_comparison(
     new_tests: list[str] = []
     removed_tests: list[str] = []
     timing: list[tuple[str, int]] = []
-    flaky: list[tuple[str, int]] = []
+    crash_rescheduled: list[tuple[str, int, int]] = []
 
     for name in all_tests:
         ra, rb = a.get(name), b.get(name)
         if ra is None:
             new_tests.append(name)
-            if rb is not None and rb.retries > 0:
-                flaky.append((name, rb.retries))
+            if rb is not None and rb.crash_reschedules > 0:
+                crash_rescheduled.append((name, 0, rb.crash_reschedules))
             continue
         if rb is None:
             removed_tests.append(name)
@@ -115,8 +115,8 @@ def print_comparison(
         if abs(delta) >= 5:
             timing.append((name, delta))
 
-        if rb.retries > 0 and rb.status == TestStatus.PASS:
-            flaky.append((name, rb.retries))
+        if ra.crash_reschedules != rb.crash_reschedules or rb.crash_reschedules > 0:
+            crash_rescheduled.append((name, ra.crash_reschedules, rb.crash_reschedules))
 
     console.print()
     console.print(Rule(f" {label_a} vs {label_b}", align="left"))
@@ -131,16 +131,16 @@ def print_comparison(
         for name, old, new in fixes:
             console.print(f"    {name}  {old} → {new}")
 
-    if flaky:
-        console.print(f"  [bold yellow]Flaky[/bold yellow] {len(flaky)}")
-        for name, retries in flaky:
-            console.print(f"    {name}  {retries} {'retry' if retries == 1 else 'retries'}")
+    if crash_rescheduled:
+        console.print(f"  [bold yellow]Crash Rescheduled[/bold yellow] {len(crash_rescheduled)}")
+        for name, count_a, count_b in crash_rescheduled:
+            console.print(f"    {name}  {count_a} → {count_b}")
 
     if new_tests:
-        new_non_flaky = [n for n in new_tests if not any(f[0] == n for f in flaky)]
-        if new_non_flaky:
-            console.print(f"  [bold blue]New in {label_b}[/bold blue] {len(new_non_flaky)}")
-            for name in new_non_flaky:
+        new_non_crashed = [n for n in new_tests if not any(c[0] == n for c in crash_rescheduled)]
+        if new_non_crashed:
+            console.print(f"  [bold blue]New in {label_b}[/bold blue] {len(new_non_crashed)}")
+            for name in new_non_crashed:
                 console.print(f"    {name}")
 
     if removed_tests:
@@ -156,7 +156,7 @@ def print_comparison(
             color = "red" if delta > 0 else "green"
             console.print(f"    [{color}]{sign}{delta}s[/{color}]  {name}")
 
-    if not regressions and not fixes and not new_tests and not removed_tests and not timing and not flaky:
+    if not regressions and not fixes and not new_tests and not removed_tests and not timing and not crash_rescheduled:
         console.print("  No differences found.")
 
     console.print()

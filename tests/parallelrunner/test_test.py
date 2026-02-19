@@ -29,10 +29,10 @@ class ConcreteTest(Test):
         return TestResult(self.name, self.id, TestStatus.PASS, duration, datetime.now(), None, retcode, stdout, stderr)
 
 
-def test_retry_creates_new_id():
+def test_reschedule_creates_new_id():
     test = ConcreteTest("btrfs/001", "echo test")
     old_id = test.id
-    test.retry()
+    test.reschedule()
 
     assert test.name == "btrfs/001"
     assert test.test_cmd == "echo test"

@@ -104,7 +104,7 @@ class TestRunner:
                     )
 
                     if test is not None:
-                        self.output.record_retry(
+                        self.output.record_crash_reschedule(
                             test,
                             TestResult.from_error(
                                 test.name,
@@ -129,7 +129,7 @@ class TestRunner:
                                 ),
                             )
                         else:
-                            test.retry()
+                            test.reschedule()
                             self.tests.append(test)
 
                 if not died:

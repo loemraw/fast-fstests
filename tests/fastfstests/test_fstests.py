@@ -77,11 +77,11 @@ def test_make_result_fail():
     assert result.status == TestStatus.FAIL
 
 
-def test_fstest_retry():
+def test_fstest_reschedule():
     config = make_config(Path("/fstests"))
     test = FSTest("btrfs/001", config)
     old_id = test.id
-    test.retry()
+    test.reschedule()
 
     assert test.name == "btrfs/001"
     assert test.id != old_id

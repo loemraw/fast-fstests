@@ -39,7 +39,7 @@ def test_print_exception_group():
     output.print_exception(exc)
 
 
-def test_record_retry_tracks_count(tmp_path: Path):
+def test_record_crash_reschedule_tracks_count(tmp_path: Path):
     output = Output(results_dir=tmp_path)
 
     class FakeTest:
@@ -47,13 +47,13 @@ def test_record_retry_tracks_count(tmp_path: Path):
         id = "2025-01-01_00-00-00_000001"
 
     result = TestResult.from_error("btrfs/001", "test-id", "supervisor died", 0.0, datetime.now())
-    output.record_retry(FakeTest(), result)  # type: ignore[arg-type]
+    output.record_crash_reschedule(FakeTest(), result)  # type: ignore[arg-type]
 
-    assert output._retries == {"btrfs/001": 1}
+    assert output._crash_reschedules == {"btrfs/001": 1}
     assert len(output._results) == 0  # not in main results
 
 
-def test_record_retry_increments(tmp_path: Path):
+def test_record_crash_reschedule_increments(tmp_path: Path):
     output = Output(results_dir=tmp_path)
 
     class FakeTest:
@@ -61,7 +61,7 @@ def test_record_retry_increments(tmp_path: Path):
         id = "2025-01-01_00-00-00_000001"
 
     result = TestResult.from_error("btrfs/001", "test-id", "supervisor died", 0.0, datetime.now())
-    output.record_retry(FakeTest(), result)  # type: ignore[arg-type]
-    output.record_retry(FakeTest(), result)  # type: ignore[arg-type]
+    output.record_crash_reschedule(FakeTest(), result)  # type: ignore[arg-type]
+    output.record_crash_reschedule(FakeTest(), result)  # type: ignore[arg-type]
 
-    assert output._retries == {"btrfs/001": 2}
+    assert output._crash_reschedules == {"btrfs/001": 2}

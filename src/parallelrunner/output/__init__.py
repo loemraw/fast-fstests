@@ -56,7 +56,7 @@ class Output:
         self._recording_label: str | None = recording_label
 
         self._results: list[TestResult] = []
-        self._retries: dict[str, int] = {}
+        self._crash_reschedules: dict[str, int] = {}
         self._duration: int = 0
 
         test_progress = self._create_test_progress()
@@ -190,8 +190,8 @@ class Output:
         self._print_result(test, result)
         self._save_result(test, result)
 
-    def record_retry(self, test: Test, result: TestResult):
-        self._retries[test.name] = self._retries.get(test.name, 0) + 1
+    def record_crash_reschedule(self, test: Test, result: TestResult):
+        self._crash_reschedules[test.name] = self._crash_reschedules.get(test.name, 0) + 1
         self._save_result(test, result)
 
     @contextmanager
@@ -264,9 +264,9 @@ class Output:
         ]:
             _ = path.joinpath(name).write_text(value)
 
-        retries = self._retries.get(test.name, 0)
-        if retries > 0:
-            _ = path.joinpath("retries").write_text(str(retries))
+        crash_reschedules = self._crash_reschedules.get(test.name, 0)
+        if crash_reschedules > 0:
+            _ = path.joinpath("crash_reschedules").write_text(str(crash_reschedules))
 
     # --- Console output ---
 
@@ -300,8 +300,8 @@ class Output:
         if self._print_duration_hist:
             self._print_time_histogram()
 
-        if self._retries:
-            self._print_retries()
+        if self._crash_reschedules:
+            self._print_crash_reschedules()
 
         self._print_result_counts()
 
@@ -362,16 +362,16 @@ class Output:
             if count := counts.get(status, 0):
                 self.console.print(f"  [bold {style}]{label}[/bold {style}] {count}")
 
-        if total_retries := sum(self._retries.values()):
-            self.console.print(f"  [bold cyan]Retried[/bold cyan] {total_retries}")
+        if total := sum(self._crash_reschedules.values()):
+            self.console.print(f"  [bold cyan]Crash Rescheduled[/bold cyan] {total}")
 
         self.console.print(f"  [bold blue]Total Time[/bold blue] {self._duration}s")
 
-    def _print_retries(self):
+    def _print_crash_reschedules(self):
         self.console.print()
-        self.console.print(Rule(" Retries", align="left"))
-        for name, count in sorted(self._retries.items()):
-            self.console.print(f"  {name}  {count} {'attempt' if count == 1 else 'attempts'}")
+        self.console.print(Rule(" Crash Reschedules", align="left"))
+        for name, count in sorted(self._crash_reschedules.items()):
+            self.console.print(f"  {name}  {count}")
 
     def _print_slowest(self):
         slowest = sorted(self._results, key=lambda r: r.duration, reverse=True)

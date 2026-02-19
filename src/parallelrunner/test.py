@@ -56,5 +56,5 @@ class Test(ABC):
     ) -> TestResult:
         pass
 
-    def retry(self):
+    def reschedule(self):
         self._id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
