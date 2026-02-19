@@ -59,6 +59,7 @@ fast-fstests --help
 | `list`              | bool         | `--list`, `-l`                  | List tests without running any.             |
 | `file_system`       | str          | `--file-system`                 | Specify file system to be tested (equivalent to -btrfs or -xfs for ./check) |
 | `slowest_first`     | str/int      | `--slowest-first [SOURCE]`      | Sort tests slowest-first using duration data from SOURCE. Uses the most recent run if omitted. Requires `--results-dir`. |
+| `rerun_failures`    | str/int      | `--rerun-failures [SOURCE]`     | Re-run only failed/errored tests from SOURCE. Uses latest if omitted. Requires `--results-dir`. |
 
 ### `[test_runner]` Section
 | Option      | Type      | CLI Argument(s)         | Description                                 |
@@ -70,6 +71,7 @@ fast-fstests --help
 | `probe_interval` | int | `--probe-interval` | Seconds between liveness probes (0 to disable). Default: 30. |
 | `max_supervisor_restarts` | int | `--max-supervisor-restarts` | Max times a test can kill a supervisor before being marked as error. Default: 3. |
 | `dmesg` | bool | `--dmesg`, `--no-dmesg` | Stream dmesg output during test execution. Default: true. |
+| `retry_failures` | int | `--retry-failures` | Max times to retry a failed test before recording failure (0 to disable). Default: 0. |
 
 ### `[mkosi]` Section
 

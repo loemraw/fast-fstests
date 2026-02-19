@@ -121,6 +121,12 @@ class TestSelectionOptions:
     ] = None
     """sort tests slowest-first using duration data from SOURCE (a recording label or a negative index like -1 for most recent recording). Uses the most recent run if SOURCE is omitted."""
 
+    rerun_failures: Annotated[
+        OptionalLabelOrIndex,
+        arg(help_behavior_hint=lambda _: ""),
+    ] = None
+    """re-run only failed/errored tests from SOURCE (a recording label, negative index, or latest if omitted). Requires --results-dir."""
+
 
 @dataclass
 class MkosiOptions:

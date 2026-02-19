@@ -147,6 +147,9 @@ def mkgroupfile(test_dir: Path) -> str:
 
 
 def collect_tests(config: Config) -> Iterable[Test]:
+    if config.test_selection.rerun_failures is not None:
+        return _collect_rerun_failures(config)
+
     tests = set[str]()
 
     for test in config.test_selection.tests:
@@ -182,3 +185,25 @@ def collect_tests(config: Config) -> Iterable[Test]:
         tests = reversed(sorted(tests))
 
     return [FSTest(test, config) for test in tests]
+
+
+def _collect_rerun_failures(config: Config) -> Iterable[Test]:
+    if config.output.results_dir is None:
+        raise ValueError("--rerun-failures requires --results-dir")
+
+    from parallelrunner.recording import load_recording, resolve_recording
+
+    assert config.test_selection.rerun_failures is not None
+    path, label = resolve_recording(
+        config.test_selection.rerun_failures, config.output.results_dir
+    )
+    results = load_recording(path)
+    failed = [
+        name
+        for name, result in results.items()
+        if result.status in (TestStatus.FAIL, TestStatus.ERROR)
+    ]
+    if not failed:
+        raise ValueError(f"no failed tests found in {label}")
+
+    return [FSTest(name, config) for name in reversed(sorted(failed))]
