@@ -37,6 +37,8 @@ class TestRunner:
         self.dmesg: bool = dmesg
 
         self._death_counts: dict[str, int] = {}
+        self._tests_in_flight: int = 0
+        self._work_or_done: asyncio.Event = asyncio.Event()
 
         self.bpftrace_command: str | None
         match bpftrace:
@@ -59,10 +61,10 @@ class TestRunner:
                     while True:
                         await asyncio.sleep(1)
         finally:
-            # Safety net: clean up any supervisors still running (keep_alive path)
             for supervisor in self.supervisors:
                 if not supervisor.exited:
-                    await supervisor.__aexit__(*sys.exc_info())
+                    with self.output.exiting_supervisor(supervisor):
+                        await supervisor.__aexit__(*sys.exc_info())
             self.output.print_summary()
 
     # --- Worker ---
@@ -75,83 +77,80 @@ class TestRunner:
             logger.exception("supervisor %r failed to spawn", supervisor)
             return
 
-        try:
-            if self.probe_interval <= 0:
-                try:
-                    await self._run_tests_loop(supervisor)
-                except OSError:
-                    logger.exception("worker for %r crashed", supervisor)
-                    self.output.supervisor_died(supervisor)
-                return
+        if self.probe_interval <= 0:
+            try:
+                await self._run_tests_loop(supervisor)
+            except OSError:
+                logger.exception("worker for %r crashed", supervisor)
+                self.output.supervisor_died(supervisor)
+            return
 
-            # Probing + restart loop
-            while True:
-                current_test: list[Test | None] = [None]
-                died = False
-                try:
-                    async with asyncio.TaskGroup() as tg:
-                        probe_task = tg.create_task(self._probe_loop(supervisor))
-                        _ = tg.create_task(
-                            self._run_tests_then_cancel(
-                                supervisor, probe_task, current_test
-                            )
+        # Probing + restart loop
+        while True:
+            current_test: list[Test | None] = [None]
+            died = False
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    probe_task = tg.create_task(self._probe_loop(supervisor))
+                    _ = tg.create_task(
+                        self._run_tests_then_cancel(
+                            supervisor, probe_task, current_test
                         )
-                except* (SupervisorExited, OSError):
-                    died = True
-                    test = current_test[0]
+                    )
+            except* (SupervisorExited, OSError):
+                died = True
+                test = current_test[0]
 
-                    if test is not None:
-                        count = self._death_counts.get(test.name, 0) + 1
-                        self._death_counts[test.name] = count
+                if test is not None:
+                    count = self._death_counts.get(test.name, 0) + 1
+                    self._death_counts[test.name] = count
 
-                        self.output.supervisor_died(
-                            supervisor, test.name, count
-                        )
-                        self.output.record_crash_reschedule(
+                    self.output.supervisor_died(
+                        supervisor, test.name, count
+                    )
+                    self.output.record_crash_reschedule(
+                        test,
+                        TestResult.from_error(
+                            test.name,
+                            test.id,
+                            "supervisor died",
+                            0.0,
+                            datetime.now(),
+                        ),
+                    )
+
+                    if count >= self.max_supervisor_restarts:
+                        self.output.finished_test(
                             test,
                             TestResult.from_error(
                                 test.name,
                                 test.id,
-                                "supervisor died",
+                                f"killed supervisor {count} times",
                                 0.0,
                                 datetime.now(),
                             ),
                         )
-
-                        if count >= self.max_supervisor_restarts:
-                            self.output.finished_test(
-                                test,
-                                TestResult.from_error(
-                                    test.name,
-                                    test.id,
-                                    f"killed supervisor {count} times",
-                                    0.0,
-                                    datetime.now(),
-                                ),
-                            )
-                        else:
-                            test.reschedule()
-                            self.tests.append(test)
                     else:
-                        self.output.supervisor_died(supervisor)
+                        test.reschedule()
+                        self.tests.append(test)
 
-                if not died:
-                    return  # Normal completion
+                    self._work_or_done.set()
+                else:
+                    self.output.supervisor_died(supervisor)
 
-                if not self.tests:
-                    return
+            if not died:
+                return  # Normal completion
 
-                try:
-                    with self.output.respawning_supervisor(supervisor):
-                        await supervisor.__aexit__(None, None, None)
-                        _ = await supervisor.__aenter__()
-                except Exception:
-                    logger.exception("failed to restart %s", supervisor)
-                    return
-        finally:
-            if not self.keep_alive:
-                with self.output.exiting_supervisor(supervisor):
+            if not self.tests and self._tests_in_flight == 0:
+                return
+
+            try:
+                with self.output.respawning_supervisor(supervisor):
                     await supervisor.__aexit__(None, None, None)
+                    _ = await supervisor.__aenter__()
+            except Exception:
+                logger.exception("failed to restart %s", supervisor)
+                return
 
     async def _run_tests_then_cancel(
         self,
@@ -171,13 +170,26 @@ class TestRunner:
         supervisor: Supervisor,
         current_test: list[Test | None] | None = None,
     ):
-        while self.tests:
+        while True:
+            if not self.tests:
+                if self._tests_in_flight == 0:
+                    self._work_or_done.set()
+                    return
+                self._work_or_done.clear()
+                await self._work_or_done.wait()
+                continue
+
             test = self.tests.pop()
+            self._tests_in_flight += 1
             if current_test is not None:
                 current_test[0] = test
-            async with self._dmesg(supervisor, test):
-                async with self._bpftrace(supervisor, test):
-                    await self._run_test(supervisor, test)
+            try:
+                async with self._dmesg(supervisor, test):
+                    async with self._bpftrace(supervisor, test):
+                        await self._run_test(supervisor, test)
+            finally:
+                self._tests_in_flight -= 1
+                self._work_or_done.set()
             if current_test is not None:
                 current_test[0] = None
 
