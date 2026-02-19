@@ -243,6 +243,9 @@ class TestRunnerOptions:
     dmesg: Annotated[bool, arg(help_behavior_hint=hbh)] = True
     """stream dmesg output during test execution"""
 
+    retry_failures: Annotated[int, arg(metavar="N", help_behavior_hint=hbh)] = 0
+    """max times to retry a failed test before recording failure (0 to disable)"""
+
 
 @dataclass
 class RunConfig:

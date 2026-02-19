@@ -159,6 +159,7 @@ def run(config: RunConfig):
             config.test_runner.probe_interval,
             config.test_runner.max_supervisor_restarts,
             config.test_runner.dmesg,
+            config.test_runner.retry_failures,
         )
         asyncio.run(runner.run())
     except KeyboardInterrupt:
