@@ -282,3 +282,17 @@ class CompareConfig:
 
     results_dir: Annotated[Path, arg(metavar="PATH")] = tyro.MISSING
     """path to results directory"""
+
+
+@dataclass
+class RecordConfig:
+    """record the most recent run for future comparisons"""
+
+    label: Annotated[
+        Positional[OptionalLabel],
+        arg(metavar="[LABEL]", help_behavior_hint=lambda _: ""),
+    ] = None
+    """label for the recording. Labels with timestamp if omitted."""
+
+    results_dir: Annotated[Path, arg(metavar="PATH")] = tyro.MISSING
+    """path to results directory"""

@@ -1,8 +1,10 @@
 import asyncio
 import logging
 import os
+import shutil
 import sys
 import tomllib
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -21,7 +23,7 @@ from parallelrunner.recording import (
 from parallelrunner.test import Test
 from parallelrunner.test_runner import TestRunner
 
-from .config import CompareConfig, RunConfig
+from .config import CompareConfig, RecordConfig, RunConfig
 from .fstests import collect_tests
 from .supervisors.mkosi import MkosiSupervisor
 
@@ -36,11 +38,13 @@ def main():
     config_path = os.getenv("FAST_FSTESTS_CONFIG_PATH") or "config.toml"
 
     default_compare_config = _NonpropagatingMissingType
+    default_record_config = _NonpropagatingMissingType
     try:
         with open(config_path, "rb") as f:
             raw = tomllib.load(f)
         if results_dir := cast(str, raw.get("output", {}).get("results_dir")):
             default_compare_config = CompareConfig(results_dir=Path(results_dir))
+            default_record_config = RecordConfig(results_dir=Path(results_dir))
     except (FileNotFoundError, tomllib.TOMLDecodeError):
         pass
 
@@ -52,6 +56,16 @@ def main():
             default=default_compare_config,
         )
         compare(config)
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "record":
+        config = tyro.cli(
+            RecordConfig,
+            args=sys.argv[2:],
+            prog="ff record",
+            default=default_record_config,
+        )
+        record_latest(config)
         return
 
     default_config = _NonpropagatingMissingType
@@ -67,15 +81,20 @@ def main():
         config = tyro.cli(RunConfig, default=default_config, prog="ff")
     except SystemExit as e:
         if e.code == 0:
-            # Help was printed — append compare help
-            try:
-                _ = tyro.cli(
-                    CompareConfig,
-                    args=["--help"],
-                    prog="ff compare",
-                    default=default_compare_config,
-                )
-            except SystemExit:
+            # Help was printed — append subcommand help
+            for subcmd_type, subcmd_name, subcmd_default in [
+                (CompareConfig, "ff compare", default_compare_config),
+                (RecordConfig, "ff record", default_record_config),
+            ]:
+                try:
+                    _ = tyro.cli(
+                        subcmd_type,
+                        args=["--help"],
+                        prog=subcmd_name,
+                        default=subcmd_default,
+                    )
+                except SystemExit:
+                    pass
                 pass
         raise
 
@@ -173,6 +192,25 @@ def sort_by_duration(
         if t.name in durations
         else float("inf"),
     )
+
+
+def record_latest(config: RecordConfig):
+    console = Console(highlight=False)
+    latest = config.results_dir / "latest"
+
+    if not latest.exists():
+        console.print("[red]No recent run found.[/red]")
+        console.print(f"  looked in: {latest}")
+        sys.exit(1)
+
+    label = config.label or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    rec_dir = config.results_dir / "recordings" / label
+
+    if rec_dir.exists():
+        shutil.rmtree(rec_dir)
+
+    _ = shutil.copytree(latest, rec_dir, symlinks=True)
+    console.print(f"Recorded as [bold]{label}[/bold]")
 
 
 def compare(config: CompareConfig):

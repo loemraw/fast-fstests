@@ -114,6 +114,17 @@ ff --record before-fix -g btrfs/auto
 ff --record -g btrfs/auto
 ```
 
+Forgot to pass `--record`? Use `ff record` after the run to retroactively save it:
+
+```bash
+ff -g btrfs/auto
+# oops, forgot --record
+ff record my-label
+
+# Or with auto-generated timestamp label
+ff record
+```
+
 Recordings are stored as directory symlinks in `results/recordings/{label}/` and are never deleted.
 
 ### Comparing runs
