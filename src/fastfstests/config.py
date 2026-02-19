@@ -47,7 +47,7 @@ OptionalLabelOrIndex = Annotated[
     int | str | None,
     tyro.constructors.PrimitiveConstructorSpec(
         nargs="?",
-        metavar="LABEL",
+        metavar="[SOURCE]",
         instance_from_str=lambda args: int(args[0])
         if args and args[0] and args[0].lstrip("-").isdigit()
         else (args[0] if args and args[0] else ""),
@@ -115,8 +115,11 @@ class TestSelectionOptions:
     ] = None
     """specify file system to be tested"""
 
-    slowest_first: OptionalLabelOrIndex = None
-    """sort tests slowest-first using duration data (no arg: latest, label: recording, negative int: recording index)"""
+    slowest_first: Annotated[
+        OptionalLabelOrIndex,
+        arg(help_behavior_hint=lambda _: ""),
+    ] = None
+    """sort tests slowest-first using duration data from SOURCE (a recording label or a negative index like -1 for most recent recording). Uses the most recent run if SOURCE is omitted."""
 
 
 @dataclass
@@ -167,7 +170,7 @@ OptionalLabel = Annotated[
     str | None,
     tyro.constructors.PrimitiveConstructorSpec(
         nargs="?",
-        metavar="LABEL",
+        metavar="[LABEL]",
         instance_from_str=lambda args: args[0]
         if args and args[0]
         else datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
@@ -196,8 +199,11 @@ class OutputOptions:
     print_duration_hist: Annotated[bool, arg(help_behavior_hint=hbh)] = False
     """print histogram of test times [plotext required]"""
 
-    record: OptionalLabel = None
-    """record this run for future comparisons, optionally with a label"""
+    record: Annotated[
+        OptionalLabel,
+        arg(help_behavior_hint=lambda _: ""),
+    ] = None
+    """record this run for future comparisons. Labels with timestamp if omitted."""
 
     def __post_init__(self):
         if self.verbose and self.results_dir is None:
@@ -262,11 +268,17 @@ class RunConfig:
 class CompareConfig:
     """compare two recorded runs"""
 
-    a: int | str = -2
-    """recording label or negative index (-1 = most recent)"""
+    baseline: Annotated[
+        OptionalLabelOrIndex,
+        arg(aliases=["-a"], help_behavior_hint=lambda _: "(default: -2)"),
+    ] = None
+    """the baseline source: a recording label, negative index (-1 = most recent recording), or omit for the most recent run"""
 
-    b: int | str = -1
-    """recording label or negative index (-1 = most recent)"""
+    changed: Annotated[
+        OptionalLabelOrIndex,
+        arg(aliases=["-b"], help_behavior_hint=lambda _: "(default: -1)"),
+    ] = None
+    """the changed source: a recording label, negative index (-1 = most recent recording), or omit for the most recent run"""
 
     results_dir: Annotated[Path, arg(metavar="PATH")] = tyro.MISSING
     """path to results directory"""

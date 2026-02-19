@@ -97,29 +97,64 @@ fast-fstests --help
 | `print_failure_list` | bool | `--print-failure-list` | Print list of tests that failed in pasteable format. |
 | `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
 | `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
-| `record` | str | `--record [LABEL]` | Record this run for future comparisons. If no label is given, a timestamp is used. |
+| `record` | str | `--record [LABEL]` | Record this run for future comparisons. Labels with timestamp if omitted. |
+| `slowest_first` | str/int | `--slowest-first [SOURCE]` | Sort tests slowest-first using duration data. Uses the most recent run if SOURCE is omitted. |
 
-## Comparing Runs
+## Recordings & Comparisons
 
-Record runs with `--record`:
+### Recording runs
+
+Use `--record` to save a snapshot of test results for later comparison. The label defaults to the current timestamp if omitted.
+
 ```bash
-fast-fstests --record before-fix -n 5 -g btrfs/auto
-# make changes...
-fast-fstests --record after-fix -n 5 -g btrfs/auto
-```
+# Record with an explicit label
+ff --record before-fix -g btrfs/auto
 
-Compare any two recordings:
-```bash
-fast-fstests compare --a before-fix --b after-fix
-```
-
-Or use negative indices to reference recent recordings (-1 = most recent, -2 = second most recent):
-```bash
-# Compare the two most recent recordings (default)
-fast-fstests compare
+# Record with auto-generated timestamp label
+ff --record -g btrfs/auto
 ```
 
 Recordings are stored as directory symlinks in `results/recordings/{label}/` and are never deleted.
+
+### Comparing runs
+
+Use `ff compare` to diff two runs. Each source (`--baseline`/`-a`, `--changed`/`-b`) can be:
+
+| SOURCE | Meaning |
+|--------|---------|
+| *(omitted)* | The most recent run (from `results/latest/`) |
+| `my-label` | A named recording |
+| `-1` | Most recent recording (by time) |
+| `-2` | Second most recent recording |
+
+```bash
+# Compare the two most recent recordings (default: --baseline -2 --changed -1)
+ff compare
+
+# Compare a named recording against the most recent run
+ff compare --baseline before-fix --changed
+
+# Compare two named recordings
+ff compare -a before-fix -b after-fix
+
+# Compare the most recent run against the most recent recording
+ff compare --baseline --changed -1
+```
+
+### Duration-aware scheduling
+
+Use `--slowest-first` to sort tests by duration from a previous run so the longest tests start first across VMs, minimizing total wallclock time. SOURCE follows the same format as `ff compare`:
+
+```bash
+# Use durations from the most recent run
+ff --slowest-first -g btrfs/auto
+
+# Use durations from a specific recording
+ff --slowest-first before-fix -g btrfs/auto
+
+# Use durations from the most recent recording
+ff --slowest-first -1 -g btrfs/auto
+```
 
 ## run
 ```

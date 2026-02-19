@@ -152,24 +152,19 @@ def run(config: RunConfig):
 def sort_by_duration(
     tests: list[Test], source: int | str, results_dir: Path
 ) -> list[Test]:
-    if source == "":
-        # No label — use latest/
-        duration_dir = results_dir / "latest"
-        if not duration_dir.exists():
+    duration_dir, label = resolve_recording(source, results_dir)
+
+    if not duration_dir.exists():
+        if source == "" or source == "latest":
             logger.warning(
                 "no previous results found for --slowest-first, using default order"
             )
             return tests
-    else:
-        # Label or negative index — resolve from recordings/
-        duration_dir, _ = resolve_recording(source, results_dir)
-
-        if not duration_dir.exists():
-            available = list_recordings(results_dir)
-            msg = f"recording not found: {source}"
-            if available:
-                msg += f" (available: {', '.join(available)})"
-            raise ValueError(msg)
+        available = list_recordings(results_dir)
+        msg = f"recording not found: {source}"
+        if available:
+            msg += f" (available: {', '.join(available)})"
+        raise ValueError(msg)
 
     durations = load_recording(duration_dir)
     return sorted(
@@ -182,16 +177,14 @@ def sort_by_duration(
 
 def compare(config: CompareConfig):
     console = Console(highlight=False)
-    rec_dir = config.results_dir / "recordings"
 
-    if not rec_dir.exists():
-        console.print("[red]No recordings found.[/red]")
-        console.print(f"  looked in: {rec_dir}")
-        sys.exit(1)
+    # Default: --baseline = second most recent recording, --changed = most recent
+    a_source: int | str = config.baseline if config.baseline is not None else -2
+    b_source: int | str = config.changed if config.changed is not None else -1
 
     try:
-        a_path, a_label = resolve_recording(config.a, config.results_dir)
-        b_path, b_label = resolve_recording(config.b, config.results_dir)
+        a_path, a_label = resolve_recording(a_source, config.results_dir)
+        b_path, b_label = resolve_recording(b_source, config.results_dir)
     except (IndexError, FileNotFoundError):
         available = list_recordings(config.results_dir)
         console.print("[red]Recording not found.[/red]")
