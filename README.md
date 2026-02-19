@@ -58,7 +58,7 @@ fast-fstests --help
 | `iterate`           | int          | `--iterate`, `-i`               | Number of times to run each test.           |
 | `list`              | bool         | `--list`, `-l`                  | List tests without running any.             |
 | `file_system`       | str          | `--file-system`                 | Specify file system to be tested (equivalent to -btrfs or -xfs for ./check) |
-| `slowest_first`     | bool         | `--slowest-first`               | Sort tests slowest-first using duration data from previous runs. Requires `--results-dir`. |
+| `slowest_first`     | str/int      | `--slowest-first [SOURCE]`      | Sort tests slowest-first using duration data from SOURCE. Uses the most recent run if omitted. Requires `--results-dir`. |
 
 ### `[test_runner]` Section
 | Option      | Type      | CLI Argument(s)         | Description                                 |
@@ -98,7 +98,6 @@ fast-fstests --help
 | `print_n_slowest` | int | `--print-n-slowest` | Print n slowest tests and their times. |
 | `print_duration_hist` | bool | `--print-duration-hist` | Print histogram of test durations. (optional dependency required: plotext) |
 | `record` | str | `--record [LABEL]` | Record this run for future comparisons. Labels with timestamp if omitted. |
-| `slowest_first` | str/int | `--slowest-first [SOURCE]` | Sort tests slowest-first using duration data. Uses the most recent run if SOURCE is omitted. |
 
 ## Recordings & Comparisons
 
