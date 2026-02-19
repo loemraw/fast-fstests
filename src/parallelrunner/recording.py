@@ -66,18 +66,16 @@ def list_recordings(results_dir: Path) -> list[str]:
     )
 
 
-def resolve_recording(value: int | str, results_dir: Path) -> tuple[Path, str]:
+def resolve_recording(value: int | str, results_dir: Path) -> Path:
     match value:
         case int():
             rec_dir = results_dir / "recordings"
             recordings = sorted(rec_dir.iterdir(), key=lambda p: p.stat().st_mtime)
-            path = recordings[value]
-            return path, path.name
+            return recordings[value]
         case "":
-            latest = results_dir / "latest"
-            return latest, f"{results_dir.name}/latest"
+            return results_dir / "latest"
         case str():
-            return results_dir / "recordings" / value, value
+            return results_dir / "recordings" / value
 
 
 def print_comparison(

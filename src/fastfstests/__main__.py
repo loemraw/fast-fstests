@@ -172,7 +172,7 @@ def run(config: RunConfig):
 def sort_by_duration(
     tests: list[Test], source: int | str, results_dir: Path
 ) -> list[Test]:
-    duration_dir, label = resolve_recording(source, results_dir)
+    duration_dir = resolve_recording(source, results_dir)
 
     if not duration_dir.exists():
         if source == "" or source == "latest":
@@ -222,8 +222,8 @@ def compare(config: CompareConfig):
     b_source: int | str = config.changed if config.changed is not None else -1
 
     try:
-        a_path, a_label = resolve_recording(a_source, config.results_dir)
-        b_path, b_label = resolve_recording(b_source, config.results_dir)
+        a_path = resolve_recording(a_source, config.results_dir)
+        b_path = resolve_recording(b_source, config.results_dir)
     except (IndexError, FileNotFoundError):
         available = list_recordings(config.results_dir)
         console.print("[red]Recording not found.[/red]")
@@ -232,17 +232,15 @@ def compare(config: CompareConfig):
         sys.exit(1)
 
     if not a_path.exists():
-        console.print(f"[red]Recording not found:[/red] {a_label}")
-        console.print(f"  looked in: {a_path}")
+        console.print(f"[red]Recording not found:[/red] {a_path}")
         sys.exit(1)
     if not b_path.exists():
-        console.print(f"[red]Recording not found:[/red] {b_label}")
-        console.print(f"  looked in: {b_path}")
+        console.print(f"[red]Recording not found:[/red] {b_path}")
         sys.exit(1)
 
     a = load_recording(a_path)
     b = load_recording(b_path)
-    print_comparison(console, a, b, a_label, b_label)
+    print_comparison(console, a, b, a_path.name, b_path.name)
 
 
 if __name__ == "__main__":

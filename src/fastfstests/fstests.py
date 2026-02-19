@@ -194,7 +194,7 @@ def _collect_rerun_failures(config: Config) -> Iterable[Test]:
     from parallelrunner.recording import load_recording, resolve_recording
 
     assert config.test_selection.rerun_failures is not None
-    path, label = resolve_recording(
+    path = resolve_recording(
         config.test_selection.rerun_failures, config.output.results_dir
     )
     results = load_recording(path)
@@ -204,6 +204,6 @@ def _collect_rerun_failures(config: Config) -> Iterable[Test]:
         if result.status in (TestStatus.FAIL, TestStatus.ERROR)
     ]
     if not failed:
-        raise ValueError(f"no failed tests found in {label}")
+        raise ValueError(f"no failed tests found in {path}")
 
     return [FSTest(name, config) for name in reversed(sorted(failed))]
