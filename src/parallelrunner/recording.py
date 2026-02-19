@@ -70,8 +70,9 @@ def resolve_recording(value: int | str, results_dir: Path) -> tuple[Path, str]:
             recordings = sorted(rec_dir.iterdir(), key=lambda p: p.stat().st_mtime)
             path = recordings[value]
             return path, path.name
-        case "latest" | "":
-            return results_dir / "latest", "latest"
+        case "":
+            latest = results_dir / "latest"
+            return latest, f"{results_dir.name}/latest"
         case str():
             return results_dir / "recordings" / value, value
 
